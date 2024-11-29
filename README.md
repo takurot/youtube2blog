@@ -1,0 +1,2 @@
+# youtube2blog
+YouTubeの中身を要約してブログ記事にする
