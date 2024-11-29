@@ -26,11 +26,11 @@ def fetch_transcript(youtube_url, language="en"):
     except Exception as e:
         return f"文字起こしを取得できませんでした: {e}"
 
-def generate_blog_article(transcript, language="ja"):
+def generate_blog_article(transcript, youtube_url, language="ja"):
     """文字起こしデータを基にOpenAI APIを使って日本語ブログ記事を生成"""
     messages = [
         { "role": "system", "content": "You are a helpful assistant who summarizes text data." },
-        { "role": "user", "content": f"以下の文字起こし内容を元に、2000〜3000字程度の日本語の解説ブログ記事を作成してください。記事は、読者が分かりやすいように構成し、重要なポイントを強調してください。\n\n{transcript}" }
+        { "role": "user", "content": f"以下の文字起こし内容を元に、2000〜3000字程度の日本語の解説ブログ記事を作成してください。記事は、読者が分かりやすいように構成し、重要なポイントを強調してください。タイトルの次に動画へのURL {youtube_url} をリンク形式でなく文字列でそのまま入れてください。\n\n{transcript}" }
     ]
 
     try:
@@ -72,7 +72,7 @@ def main():
 
     # ブログ記事を生成
     print("ブログ記事を生成中...")
-    blog_article = generate_blog_article(transcript, language="ja")
+    blog_article = generate_blog_article(transcript, youtube_url, language="ja")
 
     # ファイルに保存
     video_id = get_video_id(youtube_url)
