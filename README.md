@@ -43,7 +43,7 @@ A Python script to fetch subtitles from YouTube videos and generate detailed Jap
 Run the script with the following command:
 
 ```bash
-python youtube_to_blog.py "Language Code" "YouTube Video URL"
+python youtube2blog.py "Language Code" "YouTube Video URL"
 ```
 
 ### Arguments
