@@ -29,8 +29,18 @@ def fetch_transcript(youtube_url, language="en"):
 def generate_blog_article(transcript, youtube_url, language="ja"):
     """文字起こしデータを基にOpenAI APIを使って日本語ブログ記事を生成"""
     messages = [
-        { "role": "system", "content": "You are a helpful assistant who summarizes text data." },
-        { "role": "user", "content": f"以下の文字起こし内容を元に、2000〜3000字程度の日本語の解説ブログ記事を作成してください。記事は、読者が分かりやすいように構成し、重要なポイントを強調してください。タイトルの次に動画へのURL {youtube_url} をリンク形式でなく文字列でそのまま入れてください。\n\n{transcript}" }
+        { 
+            "role": "system", 
+            "content": "You are a helpful assistant who summarizes text data." 
+        },
+        { 
+            "role": "user", 
+            "content": f"""以下の文字起こし内容を元に、2000〜3000字程度の日本語の解説ブログ記事を作成してください。
+                        記事は、読者が分かりやすいように構成し、重要なポイントを強調してください。
+                        タイトルの次に動画へのURL {youtube_url} をリンク形式でなく文字列でそのまま入れてください。
+
+                        {transcript}"""
+        }
     ]
 
     try:
