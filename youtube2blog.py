@@ -31,12 +31,12 @@ def generate_blog_article(transcript, youtube_url, language="ja"):
     messages = [
         { 
             "role": "system", 
-            "content": "You are a helpful assistant who summarizes text data." 
+            "content": "You are a great blog writer." 
         },
         { 
             "role": "user", 
             "content": f"""以下の文字起こし内容を元に、2000〜3000字程度の日本語の解説ブログ記事を作成してください。
-                        記事は、読者が分かりやすいように構成し、重要なポイントを強調してください。
+                        記事は、読者が分かりやすいように構成し、第三者視点で重要なポイントを強調してください。
                         タイトルの次に動画へのURL {youtube_url} をリンク形式でなく文字列でそのまま入れてください。
 
                         {transcript}"""
@@ -45,10 +45,10 @@ def generate_blog_article(transcript, youtube_url, language="ja"):
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=messages,
             temperature=0.5,
-            max_tokens=2000
+            max_tokens=10000
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
