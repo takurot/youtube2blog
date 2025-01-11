@@ -89,6 +89,20 @@ youtube2blog/
 - An OpenAI API key is required, and API usage fees may apply.
 - For long videos, token limits may require additional logic to split the transcript into smaller parts.
 
+## Testing
+
+To run the unit tests, use the following command:
+
+```bash
+python -m unittest test_youtube2blog.py
+```
+
+Make sure all dependencies are installed:
+
+```bash
+pip install -r requirements.txt
+```
+
 ## License
 
 This project is licensed under the MIT License. See the `LICENSE` file for more details.

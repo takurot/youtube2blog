@@ -1,3 +1,5 @@
 env
 *.txt
 !requirements.txt
+.DS_Store
+._*
