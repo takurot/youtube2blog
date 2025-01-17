@@ -6,6 +6,11 @@ import os
 from openai import OpenAI
 
 client = OpenAI()
+# LLM_MODEL = "gpt-4o-latest"
+
+client.api_key = os.getenv('DEEPSEEK_API_KEY')
+client.base_url = "https://api.deepseek.com/v1"
+LLM_MODEL = "deepseek-chat"
 
 def get_video_id(youtube_url):
     """YouTube URLから動画IDを抽出"""
@@ -39,6 +44,8 @@ def generate_blog_article(transcript, youtube_url, language="ja"):
                         記事は、読者が分かりやすいように構成し、第三者視点で重要なポイントを強調してください。
                         かなり詳しい内容にしてください。
                         主要なトピックを網羅してください。
+                        文字起こし内容に関連するトピックをマッシュアップし、独自の見解や意見を述べてください。
+                        過去の類似事例などを踏まえて紹介し、内容を考察してください。
                         タイトルの次に動画へのURL {youtube_url} をリンク形式でなく文字列でそのまま入れてください。
 
                         {transcript}"""
@@ -47,10 +54,10 @@ def generate_blog_article(transcript, youtube_url, language="ja"):
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=LLM_MODEL,
             messages=messages,
             temperature=0.6,
-            max_tokens=10000
+            max_tokens=5000
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
