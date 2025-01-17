@@ -3,6 +3,7 @@ import re
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.formatters import TextFormatter
 import os
+from datetime import datetime
 from openai import OpenAI
 
 client = OpenAI()
@@ -94,8 +95,9 @@ def main():
     blog_article = generate_blog_article(transcript, youtube_url, language="ja")
 
     # ファイルに保存
+    today = datetime.now().strftime('%Y%m%d')
     video_id = get_video_id(youtube_url)
-    filename = f"blog_article_{video_id}.txt"
+    filename = f"{today}_blog_article_{video_id}.txt"
     save_to_file(blog_article, filename)
 
 if __name__ == "__main__":
