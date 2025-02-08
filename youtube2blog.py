@@ -7,11 +7,11 @@ from datetime import datetime
 from openai import OpenAI
 
 client = OpenAI()
-# LLM_MODEL = "gpt-4o-latest"
+LLM_MODEL = "gpt-4o"
 
-client.api_key = os.getenv('DEEPSEEK_API_KEY')
-client.base_url = "https://api.deepseek.com/v1"
-LLM_MODEL = "deepseek-chat"
+# client.api_key = os.getenv('DEEPSEEK_API_KEY')
+# client.base_url = "https://api.deepseek.com/v1"
+# LLM_MODEL = "deepseek-chat"
 
 def get_video_id(youtube_url):
     """YouTube URLから動画IDを抽出"""
@@ -43,11 +43,13 @@ def generate_blog_article(transcript, youtube_url, language="ja"):
             "role": "user", 
             "content": f"""以下の文字起こし内容を元に、2000〜3000字程度の日本語の解説ブログ記事を作成してください。
                         記事は、読者が分かりやすいように構成し、第三者視点で重要なポイントを強調してください。
-                        かなり詳しい内容にしてください。
-                        主要なトピックを網羅してください。
-                        文字起こし内容に関連するトピックをマッシュアップし、独自の見解や意見を述べてください。
-                        過去の類似事例などを踏まえて紹介し、内容を考察してください。
                         タイトルの次に動画へのURL {youtube_url} をリンク形式でなく文字列でそのまま入れてください。
+                        最初の項目は「ポイント」として、主な主張や論点の考察を箇条書きで記載して、ここだけ読めばおおよその概要がわかるようにしてください。
+                        主要なトピックを全て網羅してください。
+                        文字起こし内容に関連するトピックを適宜マッシュアップし、独自の見解や意見を述べてください。
+                        最後の項目は「まとめ」として、尖った意見を述べてください。
+                        太字(*)は使わないでください。見出し（#）は使ってください。
+                        タイトルには関連するハッシュタグを入れてください。
 
                         {transcript}"""
         }
