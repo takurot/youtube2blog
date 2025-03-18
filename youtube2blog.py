@@ -114,8 +114,7 @@ def main():
 
     # ブログ記事を生成
     print("ブログ記事を生成中...")
-    blog_article = generate_blog_article(transcript, youtube_url, language="ja", 
-                                         persona=selected_persona, blog_style=selected_style)
+    blog_article = generate_blog_article(transcript, youtube_url, language="ja")
 
     # ファイルに保存
     today = datetime.now().strftime('%Y%m%d')
