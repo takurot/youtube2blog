@@ -11,6 +11,9 @@ from datetime import datetime
 from openai import OpenAI
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+import numpy as np
+from wordcloud import WordCloud
+from janome.tokenizer import Tokenizer
 
 client = OpenAI()
 LLM_MODEL = "chatgpt-4o-latest"
@@ -392,6 +395,96 @@ def create_video_from_audio(audio_file, output_file, image_file=None, is_shorts=
         print(f"動画ファイル作成中にエラーが発生しました: {e}")
         return False
 
+def create_wordcloud_image(text, output_path, is_shorts=False):
+    """テキストからワードクラウド画像を生成"""
+    try:
+        # ショート動画かどうかで画像サイズを変える
+        if is_shorts:
+            # YouTube Shortsサイズ (9:16)
+            width, height = 1080, 1920
+        else:
+            # 通常の16:9動画サイズ
+            width, height = 1920, 1080
+        
+        # 日本語テキストを形態素解析して単語の頻度を数える
+        t = Tokenizer()
+        tokens = t.tokenize(text)
+        
+        word_frequencies = {}
+        # 名詞、動詞、形容詞のみを対象にする（助詞や記号などは除外）
+        valid_pos = ['名詞', '動詞', '形容詞']
+        
+        for token in tokens:
+            pos = token.part_of_speech.split(',')[0]  # 品詞の最初の部分
+            
+            # 特定の品詞のみをカウント
+            if pos in valid_pos:
+                word = token.surface
+                if len(word) > 2:  # 3文字以上の単語のみを対象に
+                    if word in word_frequencies:
+                        word_frequencies[word] += 1
+                    else:
+                        word_frequencies[word] = 1
+        
+        # 背景色（青色ベース）
+        bg_color = "rgb(20, 60, 140)"  # 青色
+        
+        # フォントパスを設定
+        try:
+            # macOSの場合のフォントパス
+            font_path = '/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc'
+            if not os.path.exists(font_path):
+                # Windowsの場合のフォントパス
+                font_path = 'C:\\Windows\\Fonts\\meiryo.ttc'
+                if not os.path.exists(font_path):
+                    font_path = None
+        except:
+            font_path = None
+        
+        # WordCloudオブジェクトを作成（マスクなし）
+        wc = WordCloud(
+            background_color=bg_color,
+            width=width,
+            height=height,
+            font_path=font_path,
+            colormap='YlOrRd',  # 黄色からオレンジ、赤へのグラデーション
+            min_font_size=12,
+            max_font_size=None,  # 自動調整
+            random_state=42,
+            prefer_horizontal=0.9,  # 90%の単語を水平に
+            contour_width=0,  # 輪郭線なし
+            scale=1.2,  # 単語の密度を調整
+            relative_scaling=0.7  # 単語のサイズが頻度にどの程度比例するか
+        )
+        
+        # 単語の頻度からワードクラウドを生成
+        if word_frequencies:
+            wc.generate_from_frequencies(word_frequencies)
+            
+            # ワードクラウド画像に枠を追加
+            wc_image = wc.to_image()
+            
+            # 枠を追加するための処理
+            draw = ImageDraw.Draw(wc_image)
+            border_width = 10
+            draw.rectangle(
+                [(0, 0), (width-1, height-1)],
+                outline=(255, 140, 0),  # オレンジ色の枠
+                width=border_width
+            )
+            
+            # 画像を保存
+            wc_image.save(output_path)
+            print(f"ワードクラウド画像が {output_path} に保存されました。単語数: {len(word_frequencies)}")
+            return True
+        else:
+            print("ワードクラウド生成に十分な単語が見つかりませんでした。")
+            return False
+    
+    except Exception as e:
+        print(f"ワードクラウド画像生成中にエラーが発生しました: {e}")
+        return False
+
 def main():
     # 引数の設定
     parser = argparse.ArgumentParser(description="YouTube動画の字幕を取得し、それを基にブログ記事を生成するスクリプト")
@@ -400,6 +493,7 @@ def main():
     parser.add_argument("--image", help="動画作成に使用する静止画像ファイルのパス", default=None)
     parser.add_argument("--shorts", action="store_true", help="YouTube Shorts形式（縦長動画）で出力する")
     parser.add_argument("--voice", choices=AVAILABLE_VOICES, help=f"使用する音声を指定 (選択肢: {', '.join(AVAILABLE_VOICES)}). 指定しない場合はランダム")
+    parser.add_argument("--wordcloud", action="store_true", help="ワードクラウド画像を生成して使用する")
     
     args = parser.parse_args()
     youtube_url = args.youtube_url
@@ -407,6 +501,7 @@ def main():
     image_file = args.image
     is_shorts = args.shorts
     voice = args.voice
+    use_wordcloud = args.wordcloud
 
     # 文字起こしを取得
     print("文字起こしを取得中...")
@@ -437,16 +532,28 @@ def main():
     
     # 音声出力用テキストを使用して音声を生成
     if text_to_speech(audio_text, audio_filename, voice):
-        # タイトル画像を生成（画像が指定されていない場合）
+        # 画像が指定されていない場合
         if not image_file:
-            # ブログからタイトルを抽出
-            title = extract_title_from_blog(blog_article)
-            image_filename = f"{today}_title_image_{video_id}.png"
-            
-            # タイトル画像を生成
-            print("タイトル画像を生成中...")
-            if create_title_image(title, image_filename, is_shorts):
-                image_file = image_filename
+            # ワードクラウドの生成（オプションが指定されている場合）
+            if use_wordcloud:
+                wordcloud_filename = f"{today}_wordcloud_{video_id}.png"
+                print("ワードクラウド画像を生成中...")
+                if create_wordcloud_image(blog_article, wordcloud_filename, is_shorts):
+                    image_file = wordcloud_filename
+                else:
+                    # ワードクラウド生成に失敗した場合はタイトル画像を生成
+                    title = extract_title_from_blog(blog_article)
+                    image_filename = f"{today}_title_image_{video_id}.png"
+                    print("タイトル画像を生成中...")
+                    if create_title_image(title, image_filename, is_shorts):
+                        image_file = image_filename
+            else:
+                # 通常のタイトル画像を生成
+                title = extract_title_from_blog(blog_article)
+                image_filename = f"{today}_title_image_{video_id}.png"
+                print("タイトル画像を生成中...")
+                if create_title_image(title, image_filename, is_shorts):
+                    image_file = image_filename
         
         # 音声ファイルを動画に変換
         print("音声ファイルを動画に変換中...")
