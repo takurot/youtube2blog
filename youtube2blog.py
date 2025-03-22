@@ -37,12 +37,49 @@ def fetch_transcript(youtube_url, language="en"):
     """YouTube URLから文字起こしを取得"""
     video_id = get_video_id(youtube_url)
     try:
+        # トランスクリプトを取得
         transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=[language])
-        formatter = TextFormatter()
-        formatted_transcript = formatter.format_transcript(transcript)
-        return formatted_transcript
+        
+        # トランスクリプトが取得できた場合、TextFormatterでフォーマット
+        if transcript:
+            # トランスクリプトの形式をチェック
+            if isinstance(transcript, list) and all(isinstance(item, dict) for item in transcript):
+                formatter = TextFormatter()
+                formatted_transcript = formatter.format_transcript(transcript)
+                return formatted_transcript
+            elif isinstance(transcript, dict):
+                # dictオブジェクトで、textキーがない場合の処理
+                if 'text' not in transcript:
+                    print(f"デバッグ情報: 予期しないトランスクリプト形式: {transcript}")
+                    # 利用可能なキーを使用してテキストを構築
+                    if transcript:
+                        return str(transcript)
+                    else:
+                        return f"動画ID {video_id} に対する {language} の字幕が見つかりませんでした。"
+            else:
+                # その他の予期しない形式の場合
+                print(f"デバッグ情報: 予期しない形式のトランスクリプト: {type(transcript)}")
+                return str(transcript)
+        else:
+            return f"動画ID {video_id} に対する {language} の字幕が見つかりませんでした。"
     except Exception as e:
-        return f"文字起こしを取得できませんでした: {e}"
+        # より詳細なエラーメッセージを表示
+        error_message = f"文字起こしを取得できませんでした: {str(e)}"
+        print(f"デバッグ情報: {e.__class__.__name__}")
+        print(f"デバッグ情報: トランスクリプトの型: {type(e)}")
+        
+        # 言語の自動検出を試みる
+        try:
+            # 利用可能な言語のリストを取得
+            available_languages = YouTubeTranscriptApi.list_transcripts(video_id)
+            language_list = [lang.language_code for lang in available_languages]
+            if language_list:
+                return f"指定された言語 '{language}' の字幕が見つかりませんでした。利用可能な言語: {', '.join(language_list)}"
+            else:
+                return "この動画には字幕がありません。"
+        except Exception as inner_e:
+            print(f"デバッグ情報: 言語リスト取得時のエラー: {inner_e}")
+            return error_message
 
 def generate_blog_article(transcript, youtube_url, language="ja"):
     """文字起こしデータを基にOpenAI APIを使って日本語ブログ記事を生成"""
@@ -408,19 +445,38 @@ def create_wordcloud_image(text, output_path, is_shorts=False):
         
         # 日本語テキストを形態素解析して単語の頻度を数える
         t = Tokenizer()
-        tokens = t.tokenize(text)
         
-        word_frequencies = {}
-        # 名詞、動詞、形容詞のみを対象にする（助詞や記号などは除外）
-        valid_pos = ['名詞', '動詞', '形容詞']
+        # テキストをUTF-8として明示的に処理
+        if isinstance(text, bytes):
+            text = text.decode('utf-8', errors='ignore')
+        else:
+            # 念のためstr型に変換
+            text = str(text)
         
-        for token in tokens:
-            pos = token.part_of_speech.split(',')[0]  # 品詞の最初の部分
+        try:
+            tokens = t.tokenize(text)
             
-            # 特定の品詞のみをカウント
-            if pos in valid_pos:
-                word = token.surface
-                if len(word) > 2:  # 3文字以上の単語のみを対象に
+            word_frequencies = {}
+            # 名詞、動詞、形容詞のみを対象にする（助詞や記号などは除外）
+            valid_pos = ['名詞', '動詞', '形容詞']
+            
+            for token in tokens:
+                pos = token.part_of_speech.split(',')[0]  # 品詞の最初の部分
+                
+                # 特定の品詞のみをカウント
+                if pos in valid_pos:
+                    word = token.surface
+                    if len(word) > 2:  # 3文字以上の単語のみを対象に
+                        if word in word_frequencies:
+                            word_frequencies[word] += 1
+                        else:
+                            word_frequencies[word] = 1
+        except Exception as tokenize_error:
+            print(f"形態素解析中にエラーが発生しました: {tokenize_error}")
+            # 単語分割を行わず、スペースで区切られた単語としてカウント
+            word_frequencies = {}
+            for word in text.split():
+                if len(word) > 2:
                     if word in word_frequencies:
                         word_frequencies[word] += 1
                     else:
@@ -434,37 +490,60 @@ def create_wordcloud_image(text, output_path, is_shorts=False):
             # macOSの場合のフォントパス
             font_path = '/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc'
             if not os.path.exists(font_path):
-                # Windowsの場合のフォントパス
-                font_path = 'C:\\Windows\\Fonts\\meiryo.ttc'
+                # 別のmacOSフォントパスを試す
+                font_path = '/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc'
                 if not os.path.exists(font_path):
-                    font_path = None
-        except:
+                    # Windowsの場合のフォントパス
+                    font_path = 'C:\\Windows\\Fonts\\meiryo.ttc'
+                    if not os.path.exists(font_path):
+                        # 代替フォントパス
+                        font_path = '/System/Library/Fonts/Arial Unicode.ttf'
+                        if not os.path.exists(font_path):
+                            print("適切なフォントが見つかりませんでした。デフォルトフォントを使用します。")
+                            font_path = None
+        except Exception as font_error:
+            print(f"フォントパス設定中にエラーが発生しました: {font_error}")
             font_path = None
         
-        # WordCloudオブジェクトを作成（マスクなし）
-        wc = WordCloud(
-            background_color=bg_color,
-            width=width,
-            height=height,
-            font_path=font_path,
-            colormap='YlOrRd',  # 黄色からオレンジ、赤へのグラデーション
-            min_font_size=12,
-            max_font_size=None,  # 自動調整
-            random_state=42,
-            prefer_horizontal=0.9,  # 90%の単語を水平に
-            contour_width=0,  # 輪郭線なし
-            scale=1.2,  # 単語の密度を調整
-            relative_scaling=0.7  # 単語のサイズが頻度にどの程度比例するか
-        )
+        try:
+            # WordCloudオブジェクトを作成（マスクなし）
+            wc = WordCloud(
+                background_color=bg_color,
+                width=width,
+                height=height,
+                font_path=font_path,
+                colormap='YlOrRd',  # 黄色からオレンジ、赤へのグラデーション
+                min_font_size=12,
+                max_font_size=None,  # 自動調整
+                random_state=42,
+                prefer_horizontal=0.9,  # 90%の単語を水平に
+                contour_width=0,  # 輪郭線なし
+                scale=1.2,  # 単語の密度を調整
+                relative_scaling=0.7,  # 単語のサイズが頻度にどの程度比例するか
+                normalize_plurals=False,  # 複数形を正規化しない (日本語では不要)
+                regexp=r"[\w\p{Han}\p{Hiragana}\p{Katakana}]+"  # 日本語に対応する正規表現
+            )
+        except Exception as wc_init_error:
+            print(f"WordCloudオブジェクト初期化中にエラーが発生しました: {wc_init_error}")
+            # 最小限の設定でWordCloudを作成
+            wc = WordCloud(
+                width=width, 
+                height=height,
+                background_color=bg_color
+            )
         
         # 単語の頻度からワードクラウドを生成
         if word_frequencies:
-            wc.generate_from_frequencies(word_frequencies)
-            
-            # 画像を直接ファイルに保存
-            wc.to_file(output_path)
-            print(f"ワードクラウド画像が {output_path} に保存されました。単語数: {len(word_frequencies)}")
-            return True
+            try:
+                wc.generate_from_frequencies(word_frequencies)
+                
+                # 画像を直接ファイルに保存
+                wc.to_file(output_path)
+                print(f"ワードクラウド画像が {output_path} に保存されました。単語数: {len(word_frequencies)}")
+                return True
+            except Exception as generate_error:
+                print(f"ワードクラウド生成中にエラーが発生しました: {generate_error}")
+                return False
         else:
             print("ワードクラウド生成に十分な単語が見つかりませんでした。")
             return False
