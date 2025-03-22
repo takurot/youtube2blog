@@ -79,31 +79,10 @@ def main():
     parser = argparse.ArgumentParser(description="YouTube動画の字幕を取得し、それを基にブログ記事を生成するスクリプト")
     parser.add_argument("language", help="取得したい字幕の言語コード（例: 'en', 'ja'）")
     parser.add_argument("youtube_url", help="YouTube動画のURLを指定")
-    parser.add_argument("--persona", help="ブログ記事の書き手のペルソナを指定（例: 'tech_blogger', 'business_analyst', 'educator'）")
-    parser.add_argument("--style", help="ブログ記事のスタイルを指定（例: 'analytical', 'storytelling', 'tutorial'）")
     
     args = parser.parse_args()
     youtube_url = args.youtube_url
     language = args.language
-    
-    # ペルソナの設定
-    personas = {
-        "tech_blogger": "あなたは10年以上の経験を持つ技術ブロガーで、最新技術に精通しており、実際に様々な技術を試した経験があります。あなたは読者と対話するような親しみやすい文体で書きます。",
-        "business_analyst": "あなたは企業戦略コンサルタントとして多くの企業の分析を行ってきた経験を持ちます。データに基づいた分析と実践的な提案を得意とし、ビジネスの視点から物事を考察します。",
-        "educator": "あなたは教育者として複雑な概念を初心者にもわかりやすく説明することを得意としています。具体例を多用し、ステップバイステップで理解を深める文章を書きます。",
-        "futurist": "あなたは未来学者として技術トレンドを分析し、大胆な予測を行うことを得意としています。過去の事例と現在のデータから、説得力のある未来予測を提示します。"
-    }
-    
-    # スタイルの設定
-    styles = {
-        "analytical": "データや事実に基づいた分析を重視し、論理的な構成で内容を展開してください。具体的な数字や比較を用いて説得力を高めてください。",
-        "storytelling": "物語形式で内容を展開し、読者を引き込むような文体で書いてください。個人的なエピソードや具体的な事例を多く含めてください。",
-        "tutorial": "読者が実際に試せる手順やステップを詳細に説明し、実践的なガイドとなるような内容にしてください。具体的なプロンプト例や使い方のコツを含めてください。",
-        "debate": "賛否両論を提示し、様々な視点から議論を展開してください。読者に考えるきっかけを与え、自分自身の意見も明確に述べてください。"
-    }
-    
-    selected_persona = personas.get(args.persona) if args.persona else None
-    selected_style = styles.get(args.style) if args.style else None
 
     # 文字起こしを取得
     print("文字起こしを取得中...")
