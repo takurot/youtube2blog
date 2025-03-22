@@ -461,20 +461,8 @@ def create_wordcloud_image(text, output_path, is_shorts=False):
         if word_frequencies:
             wc.generate_from_frequencies(word_frequencies)
             
-            # ワードクラウド画像に枠を追加
-            wc_image = wc.to_image()
-            
-            # 枠を追加するための処理
-            draw = ImageDraw.Draw(wc_image)
-            border_width = 10
-            draw.rectangle(
-                [(0, 0), (width-1, height-1)],
-                outline=(255, 140, 0),  # オレンジ色の枠
-                width=border_width
-            )
-            
-            # 画像を保存
-            wc_image.save(output_path)
+            # 画像を直接ファイルに保存
+            wc.to_file(output_path)
             print(f"ワードクラウド画像が {output_path} に保存されました。単語数: {len(word_frequencies)}")
             return True
         else:
