@@ -1,5 +1,7 @@
 #!/bin/bash
 
+rm ./202*.*
+
 # youtube2blog.sh - YouTube の video ID を引数として youtube2blog.py を実行するスクリプト
 
 # 使用方法の表示関数
@@ -40,6 +42,6 @@ echo "YouTube URL: $YOUTUBE_URL"
 echo "言語コード: $LANGUAGE"
 
 echo "ブログ記事の生成を開始します..."
-python youtube2blog.py "$LANGUAGE" "$YOUTUBE_URL"
+python youtube2blog.py "$LANGUAGE" "$YOUTUBE_URL" --wordcloud
 
 exit 0 
