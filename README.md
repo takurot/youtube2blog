@@ -217,3 +217,73 @@ python test_wordcloud_simple.py
 この問題はmacOSで特に発生しやすく、macOSがリソースフォークのために生成する隠しファイル（._で始まるファイル）がUTF-8以外のエンコーディングを使用していることが原因です。これらのファイルはmatplotlibのスタイル設定の読み込み時に問題を引き起こします。
 
 修正スクリプトはこれらの隠しファイルを検出し、UTF-8でエンコードされた空のファイルに置き換えることで問題を解決します。
+
+## YouTube自動アップロード機能
+
+生成したブログ記事と音声読み上げ動画をYouTubeに自動アップロードすることができます。
+
+### セットアップ
+
+1. 必要なライブラリをインストール:
+```bash
+pip install --upgrade google-api-python-client google-auth-oauthlib google-auth-httplib2
+```
+
+2. Google Cloud Platformで認証情報を取得:
+   - [Google Cloud Console](https://console.cloud.google.com/) にアクセス
+   - プロジェクトを作成またはすでにあるプロジェクトを選択
+   - 「APIとサービス」→「ライブラリ」で「YouTube Data API v3」を検索し有効化
+   - 「認証情報」→「認証情報を作成」→「OAuthクライアントID」を選択
+   - アプリケーションタイプ: デスクトップアプリ
+   - 作成された認証情報の「JSONをダウンロード」をクリック
+   - ダウンロードしたJSONファイルを`client_secrets.json`としてプロジェクトのルートディレクトリに保存するか、環境変数で指定（下記参照）
+
+3. 環境変数の設定（オプション）:
+   - クライアントシークレットファイルのパスを環境変数で指定できます
+   ```bash
+   # Linuxまたは macOS
+   export YOUTUBE_CLIENT_SECRET=/path/to/your/client_secrets.json
+   
+   # Windows (コマンドプロンプト)
+   set YOUTUBE_CLIENT_SECRET=C:\path\to\your\client_secrets.json
+   
+   # Windows (PowerShell)
+   $env:YOUTUBE_CLIENT_SECRET="C:\path\to\your\client_secrets.json"
+   ```
+
+### 使用方法
+
+コマンドラインから特定のYouTube動画ID（元にしたコンテンツ）を指定して実行:
+
+```bash
+python youtube_uploader.py [YouTube動画ID]
+```
+
+または、引数なしで実行すると最新の生成ファイルを検索してアップロード:
+
+```bash
+python youtube_uploader.py
+```
+
+特定のYouTubeチャンネルを指定してアップロード:
+
+```bash
+python youtube_uploader.py --channel チャンネル名 [YouTube動画ID]
+```
+
+run_youtube2blog.shからまとめて実行する場合:
+
+```bash
+./run_youtube2blog.sh VIDEO_ID [LANGUAGE] [CHANNEL]
+```
+
+### 機能
+
+- `*_blog_article_*.txt`ファイルからタイトルを抽出（ハッシュタグは除去）
+- 動画の説明文に元動画のURLを含める
+- 説明欄の最後にハッシュタグを追加
+- `*_blog_audio_text_*.txt`ファイルを字幕としてアップロード
+- `*_wordcloud_*.png`ファイルをサムネイルとして設定
+- 動画は非公開状態で投稿（後で確認してから公開可能）
+
+初回実行時はブラウザが開き、YouTubeアカウントでの認証が求められます。認証後は`token_チャンネル名.json`に認証情報が保存され、以降の実行では自動的に再利用されます。

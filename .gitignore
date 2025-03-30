@@ -1,5 +1,11 @@
 env
 *.txt
+*.mp4
+*.mp3
+*.png
 !requirements.txt
 .DS_Store
 ._*
+token.json
+token_*.json
+client_secrets.json
