@@ -128,10 +128,7 @@ def prepare_video_description(original_video_id):
     base_description = f"オリジナル動画：https://www.youtube.com/watch?v={original_video_id}\n\n"
     
     # 追加の説明文
-    base_description += "この動画は自動生成されたブログ記事の音声読み上げです。\n\n"
-    
-    # ハッシュタグを最後に追加
-    base_description += "#AI自動生成 #ブログ記事 #音声読み上げ"
+    base_description += "要約記事："
     
     return base_description
 
