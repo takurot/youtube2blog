@@ -51,26 +51,32 @@ fi
 
 # デフォルトでブログ記事のみのモードを有効化
 BLOG_ONLY=true
-EXTRA_ARGS="--wordcloud"
+EXTRA_ARGS=()
 
 # オプションの処理
 while [ $# -gt 0 ]; do
     case "$1" in
         --with-media)
             BLOG_ONLY=false
-            # --blog-onlyオプションを削除
-            EXTRA_ARGS="--wordcloud"
             ;;
         *)
-            EXTRA_ARGS="$EXTRA_ARGS $1"
+            # ここで他の youtube2blog.py 用オプションをハンドルする場合
+            # 例: --shorts, --no-bgm など
+            # EXTRA_ARGS="$EXTRA_ARGS $1"
+            # 今回はシンプルにするため、他のオプションは無視
             ;;
     esac
     shift
 done
 
-# ブログ記事のみの場合は--blog-onlyを追加
+# モードに応じて引数を設定
 if [ "$BLOG_ONLY" = true ]; then
-    EXTRA_ARGS="$EXTRA_ARGS --blog-only"
+    EXTRA_ARGS+=(--blog-only)
+else
+    # メディア生成モードの場合のデフォルトオプション
+    EXTRA_ARGS+=(--wordcloud)
+    # ここで --no-bgm や --shorts などのオプションを追加することも可能
+    # 例: if [ <no-bgmが指定されたか> ]; then EXTRA_ARGS="$EXTRA_ARGS --no-bgm"; fi
 fi
 
 # YouTube URL の構築
@@ -88,38 +94,12 @@ fi
 
 # ブログ記事の生成
 echo "ブログ記事の生成を開始します..."
-python youtube2blog.py "$LANGUAGE" "$YOUTUBE_URL" $EXTRA_ARGS
+python youtube2blog.py "$LANGUAGE" "$YOUTUBE_URL" "${EXTRA_ARGS[@]}"
 
 # ブログ記事のみの場合は終了
 if [ "$BLOG_ONLY" = true ]; then
     echo "ブログ記事のみを生成しました。処理を終了します。"
-    exit 0
+    # exit 0
 fi
 
-# 生成されたmp4ファイルを確認
-TODAY=$(date +%Y%m%d)
-MP4_FILE="${TODAY}_blog_video_${VIDEO_ID}.mp4"
-
-# mp4ファイルが存在するかチェック
-if [ -f "$MP4_FILE" ]; then
-    echo "動画ファイルが生成されました: $MP4_FILE"
-    echo "YouTubeへのアップロードを開始します..."
-    
-    # チャンネル指定がある場合
-    if [ -n "$CHANNEL" ]; then
-        python youtube_uploader.py --channel "$CHANNEL" "$VIDEO_ID"
-    else
-        python youtube_uploader.py "$VIDEO_ID"
-    fi
-    
-    # アップロード結果のチェック
-    if [ $? -eq 0 ]; then
-        echo "YouTubeへのアップロードが完了しました。"
-    else
-        echo "YouTubeへのアップロードに失敗しました。"
-    fi
-else
-    echo "動画ファイルが生成されていません。YouTubeへのアップロードをスキップします。"
-fi
-
-exit 0 
+# exit 0 
