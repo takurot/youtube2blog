@@ -198,26 +198,47 @@ def find_latest_files(video_id=None):
         # video_idが指定されていない場合は最新の日付のファイルを探す
         now = datetime.now()
         date_prefix = now.strftime("%Y%m%d")
+        search_video_id = "*" # ワイルドカードで検索
     else:
         # 特定のvideo_idに対応するファイルを探す
-        date_pattern = "[0-9]" * 8  # 8桁の数字 (YYYYMMDD)
-        files = glob.glob(f"{date_pattern}_blog_article_{video_id}.txt")
-        if not files:
-            print(f"指定されたvideo_id({video_id})に対応するファイルが見つかりません")
+        # 新しいファイル名パターンに対応するため、まず日付部分を特定
+        # 例: 20250513_blog_v4y0cAkJIBA_article.txt
+        article_pattern = f"[0-9]*_blog_{video_id}_article.txt"
+        matching_articles = glob.glob(article_pattern)
+        if not matching_articles:
+            print(f"指定されたvideo_id({video_id})に対応する記事ファイルが見つかりません（パターン: {article_pattern}）。")
             return None, None, None, None
         
-        date_prefix = files[0].split("_")[0]
+        # 最初にマッチした記事ファイルから日付プレフィックスを取得
+        # ファイル名が '日付_blog_ID_article.txt' 形式であることを想定
+        try:
+            date_prefix = os.path.basename(matching_articles[0]).split('_')[0]
+        except IndexError:
+            print(f"記事ファイル名 {matching_articles[0]} から日付を抽出できませんでした。")
+            return None, None, None, None
+        search_video_id = video_id
     
-    # 各ファイルタイプの検索
-    article_file = glob.glob(f"{date_prefix}_blog_article_{video_id or '*'}.txt")
-    video_file = glob.glob(f"{date_prefix}_blog_video_{video_id or '*'}.mp4")
-    audio_text_file = glob.glob(f"{date_prefix}_blog_audio_text_{video_id or '*'}.txt")
-    wordcloud_file = glob.glob(f"{date_prefix}_wordcloud_{video_id or '*'}.png")
+    # 新しいファイル名パターンでの検索
+    # 例: 20250513_blog_v4y0cAkJIBA_article.txt
+    #     20250513_blog_v4y0cAkJIBA_video.mp4
+    #     20250513_blog_v4y0cAkJIBA_audio_text.txt
+    #     20250513_blog_v4y0cAkJIBA_wordcloud.png
+
+    base_pattern = f"{date_prefix}_blog_{search_video_id}"
+
+    article_file = glob.glob(f"{base_pattern}_article.txt")
+    # 動画ファイルは_shortsサフィックスも考慮
+    video_file_normal = glob.glob(f"{base_pattern}_video.mp4")
+    video_file_shorts = glob.glob(f"{base_pattern}_video_shorts.mp4")
+    video_file = video_file_normal + video_file_shorts # 両方検索してリストを結合
+
+    audio_text_file = glob.glob(f"{base_pattern}_audio_text.txt")
+    wordcloud_file = glob.glob(f"{base_pattern}_wordcloud.png")
     
     # 最新のファイルを返す（存在する場合のみ）
     return (
         article_file[0] if article_file else None,
-        video_file[0] if video_file else None,
+        video_file[0] if video_file else None, # 複数のマッチがありうるが、最初の一つを返す
         audio_text_file[0] if audio_text_file else None,
         wordcloud_file[0] if wordcloud_file else None
     )

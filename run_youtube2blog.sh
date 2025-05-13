@@ -83,8 +83,15 @@ fi
 
 # 生成されたmp4ファイルを確認
 TODAY=$(date +%Y%m%d)
-MP4_FILE="${TODAY}_blog_video_${VIDEO_ID}.mp4"
 
+# youtube2blog.py のファイル名生成ロジックに合わせる
+FORMAT_SUFFIX=""
+# EXTRA_ARGS に --shorts が含まれているかチェック
+if [[ "$EXTRA_ARGS" == *"--shorts"* ]]; then
+    FORMAT_SUFFIX="_shorts"
+fi
+MP4_FILE="${TODAY}_blog_${VIDEO_ID}_video${FORMAT_SUFFIX}.mp4"
+echo "MP4_FILE: $MP4_FILE"
 # mp4ファイルが存在するかチェック
 if [ -f "$MP4_FILE" ]; then
     echo "動画ファイルが生成されました: $MP4_FILE"
@@ -107,4 +114,4 @@ else
     echo "動画ファイルが生成されていません。YouTubeへのアップロードをスキップします。"
 fi
 
-exit 0 
+# exit 0 
