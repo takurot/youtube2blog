@@ -73,6 +73,8 @@ python youtube2blog.py <言語コード> <YouTube動画URL> [オプション]
 - **`--voice <音声名>`**: 使用する音声を指定（指定しない場合はランダム選択）
   - 選択肢: "alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"
 - **`--wordcloud`**: タイトル画像の代わりにワードクラウド画像を生成して使用
+- **`--no-bgm`**: バックグラウンド音楽を使用しない
+- **`--blog-only`**: ブログ記事のみを生成し、音声・動画は生成しない
 
 ### 例
 
@@ -336,3 +338,34 @@ python youtube2blog.py ja "https://www.youtube.com/watch?v=VIDEO_ID" --wordcloud
    - リンク記号（[テキスト](URL)→テキストのみ残す）
 
 これにより、音声合成エンジンがマークダウン記号を読み上げてしまう問題を防ぎ、より自然な音声出力が可能になります。
+
+## コマンドラインオプション
+
+- `--image`: 動画作成に使用する静止画像ファイルを指定
+- `--shorts`: YouTube Shorts形式（縦長動画）で出力
+- `--voice`: 使用する音声を指定（alloy, echo, fable, onyx, nova, shimmer）
+- `--wordcloud`: ワードクラウド画像を生成して使用
+- `--no-bgm`: バックグラウンド音楽を使用しない
+- `--blog-only`: ブログ記事のみを生成し、音声・動画は生成しない
+
+### 使用例
+
+```bash
+# 基本的な使用方法
+python youtube2blog.py ja "https://www.youtube.com/watch?v=VIDEO_ID"
+
+# ブログ記事のみを生成する場合
+python youtube2blog.py ja "https://www.youtube.com/watch?v=VIDEO_ID" --blog-only
+
+# ワードクラウド画像を使用して動画を生成
+python youtube2blog.py ja "https://www.youtube.com/watch?v=VIDEO_ID" --wordcloud
+
+# 特定の音声を指定して動画を生成
+python youtube2blog.py ja "https://www.youtube.com/watch?v=VIDEO_ID" --voice nova
+
+# YouTube Shorts形式（縦長動画）で出力
+python youtube2blog.py ja "https://www.youtube.com/watch?v=VIDEO_ID" --shorts
+
+# BGMなしで動画を生成
+python youtube2blog.py ja "https://www.youtube.com/watch?v=VIDEO_ID" --no-bgm
+```

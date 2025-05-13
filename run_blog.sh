@@ -15,14 +15,14 @@ show_usage() {
     echo "  CHANNEL      YouTubeアップロード用のチャンネル名 (省略可能)"
     echo ""
     echo "オプション:"
-    echo "  --blog-only  ブログ記事のみを生成し、音声・動画は生成しない"
+    echo "  --with-media ブログ記事だけでなく、音声・動画も生成する"
     echo ""
     echo "例:"
     echo "  $0 5uBAQrg4SoQ"
     echo "  $0 5uBAQrg4SoQ en"
     echo "  $0 5uBAQrg4SoQ en channel1"
-    echo "  $0 5uBAQrg4SoQ en --blog-only"
-    echo "  $0 5uBAQrg4SoQ en channel1 --blog-only"
+    echo "  $0 5uBAQrg4SoQ en --with-media"
+    echo "  $0 5uBAQrg4SoQ en channel1 --with-media"
     exit 1
 }
 
@@ -36,7 +36,7 @@ VIDEO_ID=$1
 shift
 
 # 第2引数は任意 (LANGUAGE)
-LANGUAGE="en"
+LANGUAGE="ja"
 if [ $# -gt 0 ] && [[ $1 != --* ]]; then
     LANGUAGE=$1
     shift
@@ -49,14 +49,17 @@ if [ $# -gt 0 ] && [[ $1 != --* ]]; then
     shift
 fi
 
-# ブログ記事のみのモードかどうかをチェック
-BLOG_ONLY=false
+# デフォルトでブログ記事のみのモードを有効化
+BLOG_ONLY=true
 EXTRA_ARGS="--wordcloud"
+
+# オプションの処理
 while [ $# -gt 0 ]; do
     case "$1" in
-        --blog-only)
-            BLOG_ONLY=true
-            EXTRA_ARGS="$EXTRA_ARGS --blog-only"
+        --with-media)
+            BLOG_ONLY=false
+            # --blog-onlyオプションを削除
+            EXTRA_ARGS="--wordcloud"
             ;;
         *)
             EXTRA_ARGS="$EXTRA_ARGS $1"
@@ -65,6 +68,11 @@ while [ $# -gt 0 ]; do
     shift
 done
 
+# ブログ記事のみの場合は--blog-onlyを追加
+if [ "$BLOG_ONLY" = true ]; then
+    EXTRA_ARGS="$EXTRA_ARGS --blog-only"
+fi
+
 # YouTube URL の構築
 YOUTUBE_URL="https://www.youtube.com/watch?v=$VIDEO_ID"
 
@@ -72,6 +80,13 @@ YOUTUBE_URL="https://www.youtube.com/watch?v=$VIDEO_ID"
 echo "YouTube URL: $YOUTUBE_URL"
 echo "言語コード: $LANGUAGE"
 
+if [ "$BLOG_ONLY" = true ]; then
+    echo "ブログ記事のみ生成モードで実行します..."
+else
+    echo "音声・動画も含めて生成します..."
+fi
+
+# ブログ記事の生成
 echo "ブログ記事の生成を開始します..."
 python youtube2blog.py "$LANGUAGE" "$YOUTUBE_URL" $EXTRA_ARGS
 

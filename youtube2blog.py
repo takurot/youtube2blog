@@ -15,6 +15,7 @@ import numpy as np
 from wordcloud import WordCloud
 from janome.tokenizer import Tokenizer
 import time
+import xml.etree.ElementTree as ET
 
 client = OpenAI()
 LLM_MODEL = "chatgpt-4o-latest"
@@ -63,6 +64,10 @@ def fetch_transcript(youtube_url, language="en"):
                 return str(transcript)
         else:
             return f"動画ID {video_id} に対する {language} の字幕が見つかりませんでした。"
+    except ET.ParseError as e:
+        error_message = f"字幕データのパースに失敗しました（ParseError）: {str(e)}"
+        print(error_message)
+        return error_message
     except Exception as e:
         # より詳細なエラーメッセージを表示
         error_message = f"文字起こしを取得できませんでした: {str(e)}"
@@ -605,6 +610,7 @@ def main():
     parser.add_argument("--voice", choices=AVAILABLE_VOICES, help=f"使用する音声を指定 (選択肢: {', '.join(AVAILABLE_VOICES)}). 指定しない場合はランダム")
     parser.add_argument("--wordcloud", action="store_true", help="ワードクラウド画像を生成して使用する")
     parser.add_argument("--no-bgm", action="store_true", help="バックグラウンド音楽を使用しない")
+    parser.add_argument("--blog-only", action="store_true", help="ブログ記事のみを生成し、音声・動画は生成しない")
     
     args = parser.parse_args()
     youtube_url = args.youtube_url
@@ -614,6 +620,7 @@ def main():
     voice = args.voice
     use_wordcloud = args.wordcloud
     use_bgm = not args.no_bgm
+    blog_only = args.blog_only
 
     # 文字起こしを取得
     print("文字起こしを取得中...")
@@ -631,6 +638,11 @@ def main():
     video_id = get_video_id(youtube_url)
     text_filename = f"{today}_blog_article_{video_id}.txt"
     save_to_file(blog_article, text_filename)
+    
+    # ブログ記事のみのモードの場合はここで終了
+    if blog_only:
+        print(f"ブログ記事のみ生成モード: ブログ記事が {text_filename} に保存されました。")
+        return
     
     # 音声出力用のテキストを生成
     print("音声出力用テキストを生成中...")
