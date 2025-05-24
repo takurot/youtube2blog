@@ -94,7 +94,7 @@ echo ""
 
 # --- 1. ブログ記事と初期タイムスタンプの生成 ---
 echo "ステップ1: ブログ記事と初期タイムスタンプを生成中 (${ARTICLE_FILE}, ${INITIAL_TIMESTAMPS_FILE})..."
-"$PYTHON_EXEC" youtube2blog.py "$LANGUAGE" "$YOUTUBE_URL" --blog-only
+"$PYTHON_EXEC" youtube2blog.py "$LANGUAGE" "$YOUTUBE_URL" --skip-tts-video
 if [ $? -ne 0 ]; then
     echo "エラー: youtube2blog.py の実行に失敗しました。"
     exit 1

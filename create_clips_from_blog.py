@@ -205,11 +205,14 @@ def get_clips_info_from_timestamps(blog_points_from_article: list[str], timestam
         point_text_from_article = ""
         if blog_points_from_article and 0 <= blog_point_id < len(blog_points_from_article):
             point_text_from_article = blog_points_from_article[blog_point_id]
-            print(f"  処理中 blog_point_id {blog_point_id}: 「{point_text_from_article[:30].replace('\n', ' ')}...」 (記事本文より)")
+            # f-string内のバックスラッシュを避けるために、改行置換を先に行う
+            display_text_snippet = point_text_from_article[:30].replace('\n', ' ')
+            print(f"  処理中 blog_point_id {blog_point_id}: 「{display_text_snippet}...」 (記事本文より)")
         else:
             # Fallback to snippet if full text is not available or index is out of bounds
             point_text_from_article = snippet_from_ts 
-            print(f"  処理中 blog_point_id {blog_point_id}: 「{snippet_from_ts[:30].replace('\n', ' ')}...」 (スニペットより - 記事本文の対応ポイントなし)")
+            display_text_snippet = snippet_from_ts[:30].replace('\n', ' ')
+            print(f"  処理中 blog_point_id {blog_point_id}: 「{display_text_snippet}...」 (スニペットより - 記事本文の対応ポイントなし)")
 
         current_point_info = {
             "blog_point_id": blog_point_id,
@@ -269,10 +272,9 @@ def create_video_clips(video_id: str, clips_info: list[dict], output_dir: str = 
             except subprocess.CalledProcessError as e:
                 print(f"yt-dlpでの動画ダウンロード中にエラーが発生しました。")
                 print(f"  Return code: {e.returncode}")
-                print(f"""  yt-dlp stderr:
-{e.stderr}""")
-                print(f"""  yt-dlp stdout:
-{e.stdout}""")
+                # stderrとstdoutをより詳細に出力
+                print(f"  yt-dlp stderr:\n{e.stderr}")
+                print(f"  yt-dlp stdout:\n{e.stdout}")
                 print(f"動画をダウンロードできませんでした。処理を中断します。手動でダウンロードして --video_path で指定してください。")
                 return
             except Exception as e:
@@ -298,11 +300,14 @@ def create_video_clips(video_id: str, clips_info: list[dict], output_dir: str = 
         
         print(f"[Debug create_video_clips] Processing item index {i}, blog_point_id: {current_blog_point_id}") # DEBUG
         
+        # f-string内のバックスラッシュを避けるために、表示用テキストを事前に準備
+        display_blog_point_text = blog_point_text[:30].replace('\n', ' ')
+
         if not video_segments:
-            print(f"  ブログポイントID {current_blog_point_id} (「{blog_point_text[:30].replace('\n', ' ')}...」) には動画クリップがありません。スキップします。")
+            print(f"  ブログポイントID {current_blog_point_id} (「{display_blog_point_text}...」) には動画クリップがありません。スキップします。")
             continue
 
-        print(f"  ブログポイントID {current_blog_point_id} (「{blog_point_text[:30].replace('\n', ' ')}...」) のクリップを生成中...")
+        print(f"  ブログポイントID {current_blog_point_id} (「{display_blog_point_text}...」) のクリップを生成中...")
 
         # If a blog point has multiple video_segments, concatenate them or save as separate sub-clips.
         # For now, let's save each segment as a separate sub-clip.

@@ -71,7 +71,7 @@ done
 
 # モードに応じて引数を設定
 if [ "$BLOG_ONLY" = true ]; then
-    EXTRA_ARGS+=(--blog-only)
+    EXTRA_ARGS+=(--blog-only --no-timestamps)
 else
     # メディア生成モードの場合のデフォルトオプション
     EXTRA_ARGS+=(--wordcloud)
@@ -83,8 +83,8 @@ fi
 YOUTUBE_URL="https://www.youtube.com/watch?v=$VIDEO_ID"
 
 # コマンドの実行
-echo "YouTube URL: $YOUTUBE_URL"
-echo "言語コード: $LANGUAGE"
+# echo "YouTube URL: $YOUTUBE_URL"
+# echo "言語コード: $LANGUAGE"
 
 if [ "$BLOG_ONLY" = true ]; then
     echo "ブログ記事のみ生成モードで実行します..."
