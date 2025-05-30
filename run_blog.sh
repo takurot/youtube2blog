@@ -72,9 +72,11 @@ done
 # モードに応じて引数を設定
 if [ "$BLOG_ONLY" = true ]; then
     EXTRA_ARGS+=(--blog-only)
+    EXTRA_ARGS+=(--min-words 2500 --max-words 3000) # ブログモードは長めに
 else
     # メディア生成モードの場合のデフォルトオプション
     EXTRA_ARGS+=(--wordcloud)
+    EXTRA_ARGS+=(--min-words 2500 --max-words 3000) # メディア生成でも記事は長めに
     # ここで --no-bgm や --shorts などのオプションを追加することも可能
     # 例: if [ <no-bgmが指定されたか> ]; then EXTRA_ARGS="$EXTRA_ARGS --no-bgm"; fi
 fi

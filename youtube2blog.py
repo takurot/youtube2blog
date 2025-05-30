@@ -96,8 +96,10 @@ def fetch_transcript(youtube_url, language="en"):
         print(f"デバッグ情報: {e.__class__.__name__}")
         return {"error": error_message, "data": None}
 
-def generate_blog_article(transcript_data: list[dict], youtube_url: str, language: str = "ja") -> tuple[str | None, list | None, str | None]:
+def generate_blog_article(transcript_data: list[dict], youtube_url: str, language: str = "ja", min_words: int = 2000, max_words: int = 2500) -> tuple[str | None, list | None, str | None]:
     """文字起こしデータ (セグメントのリスト) を基にOpenAI APIを使ってブログ記事とタイムスタンプ情報を生成。
+    min_words: 記事の最小目標文字数
+    max_words: 記事の最大目標文字数
     戻り値: (ブログ記事文字列, タイムスタンプ情報リスト, エラーメッセージ)
     """
     if not transcript_data:
@@ -120,14 +122,14 @@ def generate_blog_article(transcript_data: list[dict], youtube_url: str, languag
     transcript_string_for_llm = "\\n".join(formatted_transcript_for_llm)
     
     # LLMへの指示 (プロンプト)
-    # タイムスタンプ情報をJSON形式で出力させるように依頼
-    # LLMがJSONをうまく生成できない場合に備えて、特定の区切り文字を使うことも検討できる
+    word_count_instruction = f"2. 記事全体の文字数は{min_words}〜{max_words}字程度にしてください。"
+
     prompt_content = f"""以下のYouTube動画の文字起こしを元に、日本語の解説ブログ記事を作成してください。
 文字起こしは各セグメントに [Segment ID | Start: 開始時間s | End: 終了時間s] の形式で情報が付与されています。
 
 ブログ記事の要件:
 1. 読者が分かりやすいように、より詳細な説明や具体的な例を交えながら構成し、第三者視点で重要なポイントを深く掘り下げて強調してください。
-2. 記事全体の文字数は2000〜2500字程度にしてください。
+{word_count_instruction}
 3. タイトルの次に動画のURL ({youtube_url}) を文字列としてそのまま記載してください。
 4. 最初の項目は「## ポイント」として、主な主張や論点の考察を箇条書きで記載し、ここだけ読めば概要がわかるようにしてください。各ポイントは具体的で、詳細な説明や背景情報も適宜含めてください。
 5. 文字起こし内容に関連するトピックを適宜マッシュアップし、独自の見解や意見、さらには具体的な事例や応用例を交えながら述べてください。
@@ -200,9 +202,9 @@ def generate_blog_article(transcript_data: list[dict], youtube_url: str, languag
             if blog_article_text:
                 # Matches "[Segment" followed by any characters except "]" until "]"
                 # Handles multi-digit segment numbers and potential extra spaces.
-                blog_article_text = re.sub(r"\\s*\\[Segment[^]]+\\]\\s*", "", blog_article_text)
+                blog_article_text = re.sub(r"\s*\[Segment[^\]]+\]\s*", "", blog_article_text)
                 # Also remove any remaining empty lines that might result from the substitution
-                blog_article_text = re.sub(r"\\n\\s*\\n", "\\n\\n", blog_article_text).strip()
+                blog_article_text = re.sub(r"\n\s*\n", "\n\n", blog_article_text).strip()
 
             # タイムスタンプ情報を整形 (source_segment_idsから実際の時間情報を復元)
             final_timeline_references = []
@@ -874,6 +876,18 @@ def main():
     parser.add_argument("--wordcloud", action="store_true", help="ワードクラウド画像を生成して使用する")
     parser.add_argument("--no-bgm", action="store_true", help="バックグラウンド音楽を使用しない")
     parser.add_argument("--blog-only", action="store_true", help="ブログ記事のみを生成し、音声・動画は生成しない")
+    parser.add_argument(
+        "--min-words",
+        type=int,
+        default=2000,
+        help="ブログ記事の最小目標文字数 (デフォルト: 2000)"
+    )
+    parser.add_argument(
+        "--max-words",
+        type=int,
+        default=2500,
+        help="ブログ記事の最大目標文字数 (デフォルト: 2500)"
+    )
     
     args = parser.parse_args()
     youtube_url = args.youtube_url
@@ -884,6 +898,8 @@ def main():
     use_wordcloud = args.wordcloud
     use_bgm = not args.no_bgm
     blog_only = args.blog_only
+    min_words_arg = args.min_words
+    max_words_arg = args.max_words
 
     # --- 1. Setup --- 
     output_filenames = _generate_output_filenames(youtube_url, args.shorts)
@@ -899,7 +915,7 @@ def main():
     timestamps_file = output_filenames['timestamps'] # タイムスタンプファイル名を取得
 
     # --blog-onlyが指定された場合は、記事と音声合成用のテキストのみ生成
-    # if blog_only:
+    # if blog_only:  # This block (lines approx 908-910) should remain commented out.
     #     print(f"\nブログ記事のみ生成モード完了: {article_file}")
     #     return # ここにあった早期リターンを移動
 
@@ -922,7 +938,13 @@ def main():
 
     # --- 3. Generate Blog Article & Timestamps ---
     print("\nブログ記事とタイムスタンプ情報を生成中...")
-    blog_article_text, timeline_references, error_message = generate_blog_article(transcript_data, youtube_url, language=fetched_language)
+    blog_article_text, timeline_references, error_message = generate_blog_article(
+        transcript_data, 
+        youtube_url, 
+        language=fetched_language,
+        min_words=min_words_arg, # Pass the new argument
+        max_words=max_words_arg  # Pass the new argument
+    )
     
     if error_message:
         print(f"ブログ記事生成エラー: {error_message}")
@@ -939,18 +961,16 @@ def main():
     print("ブログ記事生成成功。")
     save_to_file(blog_article_text, article_file)
 
-    # タイムスタンプ情報を保存
+    # --blog-only が指定された場合は、ここでタイムスタンプ保存前に処理を終了
+    if blog_only: # This block (lines approx 936-938) is the correct one and should be active.
+        print(f"\nブログ記事生成完了 (音声・動画作成、タイムスタンプファイル作成はスキップ): {article_file}")
+        return # Exit before attempting to save timestamps
+
+    # タイムスタンプ情報を保存 (blog_only でない場合のみ実行される)
     if timeline_references:
         save_timestamps_to_file(timeline_references, timestamps_file)
     else:
-        print("タイムスタンプ情報は生成されませんでした。")
-
-    # --blog-only が指定された場合は、ここで処理を終了
-    if blog_only:
-        print(f"\nブログ記事生成完了 (音声・動画はスキップ): {article_file}")
-        if os.path.exists(timestamps_file):
-             print(f"タイムスタンプ情報も生成されました: {timestamps_file}")
-        return
+        print("タイムスタンプ情報は生成されませんでした（動画/音声処理用）。")
 
     # --- 4. Create and Save Audio Text --- 
     print(f"\n音声出力用テキストを生成・保存中 ({audio_text_file})...")

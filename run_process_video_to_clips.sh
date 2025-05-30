@@ -3,6 +3,7 @@
 # process_video_to_clips.sh - ブログ記事作成、タイムスタンプマージ、クリップ作成を自動化
 
 rm ./202*.*
+# rm ./*.mp4
 
 # --- 設定 ---
 PYTHON_EXEC="python" # Pythonの実行コマンド
@@ -94,7 +95,7 @@ echo ""
 
 # --- 1. ブログ記事と初期タイムスタンプの生成 ---
 echo "ステップ1: ブログ記事と初期タイムスタンプを生成中 (${ARTICLE_FILE}, ${INITIAL_TIMESTAMPS_FILE})..."
-"$PYTHON_EXEC" youtube2blog.py "$LANGUAGE" "$YOUTUBE_URL" --blog-only
+"$PYTHON_EXEC" youtube2blog.py "$LANGUAGE" "$YOUTUBE_URL" --blog-only --min-words 2000 --max-words 2500
 if [ $? -ne 0 ]; then
     echo "エラー: youtube2blog.py の実行に失敗しました。"
     exit 1

@@ -287,25 +287,34 @@ def create_video_clips(video_id: str, clips_info: list[dict], output_dir: str = 
     print(f"\n動画クリップの生成を開始します... (出力先: {output_dir})")
     print(f"[Debug create_video_clips] Total points to process: {len(clips_info)}") # DEBUG
 
-    generated_clips_index = [] # To store info for the JSON index
+    final_clips_index_data = [] # To store info for the JSON index after potential concatenation
 
     for i, point_data in enumerate(clips_info):
         blog_point_text = point_data["blog_point_text"]
         video_segments = point_data["clips"]
-        # blog_point_id_from_data = point_data.get("blog_point_id", "N/A") # Get blog_point_id if available
-        # Use the explicit blog_point_id from point_data which should now exist
-        current_blog_point_id = point_data.get("blog_point_id", i) # Fallback to index i if somehow missing
+        current_blog_point_id = point_data.get("blog_point_id", i) 
         
-        print(f"[Debug create_video_clips] Processing item index {i}, blog_point_id: {current_blog_point_id}") # DEBUG
+        def extract_title(text: str) -> str:
+            lines = text.strip().splitlines()
+            for line in lines:
+                line = line.strip()
+                if line.startswith('#'):
+                    return line.lstrip('#').strip()
+            if lines:
+                return lines[0][:30] + ("..." if len(lines[0]) > 30 else "")
+            return text[:30] + ("..." if len(text) > 30 else "")
+        blog_point_title = extract_title(blog_point_text)
         
         if not video_segments:
             print(f"  ブログポイントID {current_blog_point_id} (「{blog_point_text[:30].replace('\n', ' ')}...」) には動画クリップがありません。スキップします。")
             continue
 
         print(f"  ブログポイントID {current_blog_point_id} (「{blog_point_text[:30].replace('\n', ' ')}...」) のクリップを生成中...")
+        
+        temp_segment_files = []
+        overall_start_time = None
+        overall_end_time = None
 
-        # If a blog point has multiple video_segments, concatenate them or save as separate sub-clips.
-        # For now, let's save each segment as a separate sub-clip.
         for j, segment in enumerate(video_segments):
             start_time = segment.get("start_time")
             end_time = segment.get("end_time")
@@ -314,69 +323,118 @@ def create_video_clips(video_id: str, clips_info: list[dict], output_dir: str = 
                 print(f"    セグメント {j} の開始/終了時間が不完全です。スキップします。")
                 continue
             
-            # Simplified filename
-            clip_basename = f"point_{i:02d}_segment_{j:02d}_clip.mp4"
-            output_filename = os.path.join(output_dir, clip_basename)
+            if overall_start_time is None or start_time < overall_start_time:
+                overall_start_time = start_time
+            if overall_end_time is None or end_time > overall_end_time:
+                overall_end_time = end_time
+
+            temp_clip_basename = f"point_{current_blog_point_id:02d}_segment_{j:02d}_temp.mp4"
+            temp_output_filename = os.path.join(output_dir, temp_clip_basename)
             
-            # FFmpeg command to cut the clip
-            # -ss: start time, -to: end_time (or -t duration)
-            # Using -to for precise end time
-            # Add -avoid_negative_ts make_zero to handle potential timestamp issues
-            
-            # Re-encode for more precise cuts, and move -ss after -i
             cmd = [
                 'ffmpeg', '-y',
                 '-i', original_video_path, 
-                '-ss', str(round(start_time, 3)), # Round to 3 decimal places
-                '-to', str(round(end_time, 3)),     # Round to 3 decimal places
+                '-ss', str(round(start_time, 3)),
+                '-to', str(round(end_time, 3)),
                 '-c:v', 'libx264', '-preset', 'medium', 
                 '-c:a', 'aac', '-b:a', '192k',
                 '-avoid_negative_ts', 'make_zero', 
-                output_filename
+                temp_output_filename
             ]
-
-            # Original -c copy command (commented out)
-            # cmd = [
-            #     'ffmpeg', '-y',
-            #     '-ss', str(start_time),
-            #     '-i', original_video_path,
-            #     '-to', str(end_time),
-            #     '-c', 'copy', 
-            #     '-avoid_negative_ts', 'make_zero', 
-            #     output_filename
-            # ]
-
-            print(f"    FFmpegコマンド: {' '.join(cmd)}")
+            
+            print(f"    一時セグメントFFmpegコマンド: {' '.join(cmd)}")
             try:
                 result = subprocess.run(cmd, capture_output=True, text=True, check=False, encoding='utf-8', errors='ignore')
                 if result.returncode == 0:
-                    print(f"      クリップ成功: {output_filename}")
-                    generated_clips_index.append({
-                        "clip_filename": clip_basename,
-                        "blog_point_index": i, # Corresponds to the order in the clips_info list (derived from timestamp_data order)
-                        "blog_point_id": current_blog_point_id, # The actual blog_point_id from timestamp data
-                        "blog_point_summary": blog_point_text, # Full text of the point
-                        "start_time": start_time,
-                        "end_time": end_time
-                    })
+                    print(f"      一時セグメント成功: {temp_output_filename}")
+                    temp_segment_files.append(temp_output_filename)
                 else:
-                    print(f"      クリップ失敗 (ffmpegエラー): {output_filename}")
-                    print(f"        stderr: {result.stderr[:500]}...") # Log snippet of error
+                    print(f"      一時セグメント失敗 (ffmpegエラー): {temp_output_filename}")
+                    print(f"        stderr: {result.stderr[:500]}...")
             except FileNotFoundError:
                 print("エラー: ffmpegコマンドが見つかりません。ffmpegがインストールされ、PATHに含まれていることを確認してください。")
-                return # Stop further processing if ffmpeg is missing
+                return 
             except Exception as e:
-                print(f"      クリップ生成中に予期せぬエラー: {e}")
-                
-    # After processing all clips, write the index file
-    if generated_clips_index:
+                print(f"      一時セグメント生成中に予期せぬエラー: {e}")
+        
+        # Process collected temp segments for this blog point
+        final_clip_basename_for_point = f"point_{current_blog_point_id:02d}_clip.mp4"
+        final_output_filename_for_point = os.path.join(output_dir, final_clip_basename_for_point)
+
+        if not temp_segment_files:
+            print(f"  ブログポイントID {current_blog_point_id} の一時セグメントが生成されませんでした。スキップします。")
+            continue
+
+        if len(temp_segment_files) == 1:
+            # Single segment, just rename
+            try:
+                os.rename(temp_segment_files[0], final_output_filename_for_point)
+                print(f"    単一セグメントのためリネーム: {temp_segment_files[0]} -> {final_output_filename_for_point}")
+                final_clips_index_data.append({
+                    "clip_filename": final_clip_basename_for_point,
+                    "blog_point_id": current_blog_point_id,
+                    "blog_point_summary": blog_point_text,
+                    "blog_point_title": blog_point_title,
+                    "start_time": overall_start_time, # Should be the segment's start time
+                    "end_time": overall_end_time    # Should be the segment's end time
+                })
+            except OSError as e:
+                print(f"    一時ファイルのリネーム中にエラー: {e}")
+        
+        elif len(temp_segment_files) > 1:
+            # Multiple segments, concatenate using filter_complex concat (more robust)
+            input_args = []
+            filter_inputs = []
+            for idx, temp_file in enumerate(temp_segment_files):
+                input_args += ['-i', temp_file]
+                filter_inputs += [f'[{idx}:v][{idx}:a]']
+            n = len(temp_segment_files)
+            filter_complex = f'{"".join(filter_inputs)}concat=n={n}:v=1:a=1[outv][outa]'
+            concat_cmd = [
+                'ffmpeg', '-y', *input_args,
+                '-filter_complex', filter_complex,
+                '-map', '[outv]', '-map', '[outa]',
+                '-c:v', 'libx264', '-preset', 'medium',
+                '-c:a', 'aac', '-b:a', '192k',
+                '-avoid_negative_ts', 'make_zero',
+                final_output_filename_for_point
+            ]
+            print(f"    結合FFmpegコマンド: {' '.join(str(x) for x in concat_cmd)}")
+            result_concat = subprocess.run(concat_cmd, capture_output=True, text=True, check=False, encoding='utf-8', errors='ignore')
+            if result_concat.returncode == 0:
+                print(f"      結合成功: {final_output_filename_for_point}")
+                final_clips_index_data.append({
+                    "clip_filename": final_clip_basename_for_point,
+                    "blog_point_id": current_blog_point_id,
+                    "blog_point_summary": blog_point_text,
+                    "blog_point_title": blog_point_title,
+                    "start_time": overall_start_time, # Overall start for the concatenated clip
+                    "end_time": overall_end_time    # Overall end for the concatenated clip
+                })
+            else:
+                print(f"      結合失敗 (ffmpegエラー): {final_output_filename_for_point}")
+                print(f"        stderr: {result_concat.stderr[:500]}...")
+
+            # Clean up temporary segment files
+            for temp_file in temp_segment_files:
+                if os.path.exists(temp_file):
+                    try:
+                        os.remove(temp_file)
+                        print(f"      一時ファイルを削除: {temp_file}")
+                    except OSError as e_remove:
+                         print(f"      一時ファイルの削除中にエラー: {e_remove}")
+            # No concat_list file to remove in this method
+                        
+    # After processing all clips, write the final index file
+    if final_clips_index_data:
         index_file_path = os.path.join(output_dir, "clips_index.json")
         try:
+            final_clips_index_data.sort(key=lambda x: x.get("blog_point_id", float('inf'))) # Sort by blog_point_id
             with open(index_file_path, 'w', encoding='utf-8') as f:
-                json.dump(generated_clips_index, f, ensure_ascii=False, indent=4)
-            print(f"\nクリップインデックスファイルを保存しました: {index_file_path}")
+                json.dump(final_clips_index_data, f, ensure_ascii=False, indent=4)
+            print(f"\n最終クリップインデックスファイルを保存しました: {index_file_path}")
         except Exception as e:
-            print(f"\nクリップインデックスファイルの保存中にエラーが発生しました: {e}")
+            print(f"\n最終クリップインデックスファイルの保存中にエラーが発生しました: {e}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="ブログ記事とタイムスタンプ情報に基づいて動画クリップを生成します。")
