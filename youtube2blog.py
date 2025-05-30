@@ -16,6 +16,8 @@ from wordcloud import WordCloud
 from janome.tokenizer import Tokenizer
 import time
 import xml.etree.ElementTree as ET
+import json
+import traceback
 
 client = OpenAI()
 LLM_MODEL = "chatgpt-4o-latest"
@@ -31,30 +33,40 @@ def get_video_id(youtube_url):
     """YouTube URLから動画IDを抽出"""
     video_id_match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11})', youtube_url)
     if video_id_match:
-        return video_id_match.group(1)
+        extracted_id = video_id_match.group(1)
+        # print(f"DEBUG: Extracted Video ID: {extracted_id} from URL: {youtube_url}")
+        return extracted_id
     else:
+        # print(f"DEBUG: Failed to extract Video ID from URL: {youtube_url}")
         raise ValueError("無効なYouTube URLです。動画IDを取得できませんでした。")
 
 def fetch_transcript(youtube_url, language="en"):
     """YouTube URLから文字起こしを取得し、セグメントのリスト（各要素はtext, start, durationを含む辞書）を返す"""
-    video_id = get_video_id(youtube_url)
+    try:
+        video_id = get_video_id(youtube_url)
+    except ValueError as e:
+        return {"error": str(e), "data": None}
+
     try:
         # トランスクリプトを取得
+        # print(f"DEBUG: Attempting to list transcripts for video_id: {video_id}")
         transcript_list_api = YouTubeTranscriptApi.list_transcripts(video_id)
         
         try:
             # 指定された言語のトランスクリプトを検索
+            # print(f"DEBUG: Attempting to find transcript for language: {language}")
             transcript = transcript_list_api.find_transcript([language])
         except NoTranscriptFound:
             print(f"指定された言語 '{language}' の文字起こしが見つかりません。利用可能な言語を試みます...")
-            # 利用可能な言語で最初に見つかったものを試す (手動または生成されたもの)
             available_langs = [t.language_code for t in transcript_list_api]
+            # print(f"DEBUG: Available languages: {available_langs}")
             if not available_langs:
                  return {"error": "この動画には字幕がありません。", "data": None}
             
             found_transcript = False
             for lang_code in available_langs:
                 try:
+                    # print(f"DEBUG: Attempting to find transcript for fallback language: {lang_code}")
                     transcript = transcript_list_api.find_transcript([lang_code])
                     print(f"代わりに言語 '{lang_code}' を使用します。")
                     language = lang_code # Update language for consistency
@@ -66,21 +78,20 @@ def fetch_transcript(youtube_url, language="en"):
                  return {"error": "利用可能な言語の文字起こしも見つかりませんでした。", "data": None}
 
         # トランスクリプトデータを取得 (辞書のリスト形式)
+        # print(f"DEBUG: Fetching transcript data for language: {language}")
         transcript_data = transcript.fetch()
         
         if transcript_data:
-            # 念のため形式をチェック (リストであり、各要素が辞書であること)
             if isinstance(transcript_data, list) and all(isinstance(item, dict) for item in transcript_data):
                 print(f"文字起こしを正常に取得しました。言語: {language}, セグメント数: {len(transcript_data)}")
                 return {"error": None, "data": transcript_data, "language": language}
             else:
                 error_msg = f"予期しない形式のトランスクリプトデータ: {type(transcript_data)}"
-                print(f"デバッグ情報: {error_msg}")
+                # print(f"デバッグ情報: {error_msg}")
                 return {"error": error_msg, "data": None}
         else:
-            # これは通常発生しないはず (fetch()が空リストを返す場合など)
             error_msg = f"動画ID {video_id} ({language}) の文字起こしデータの取得に失敗しました（空データ）。"
-            print(error_msg)
+            # print(error_msg)
             return {"error": error_msg, "data": None}
             
     except TranscriptsDisabled:
@@ -90,14 +101,17 @@ def fetch_transcript(youtube_url, language="en"):
     except ET.ParseError as e:
         error_message = f"字幕データのパースに失敗しました（ParseError）: {str(e)}"
         print(error_message)
+        traceback.print_exc()
         return {"error": error_message, "data": None}
     except Exception as e:
         error_message = f"文字起こし取得中に予期せぬエラーが発生しました: {str(e)}"
-        print(f"デバッグ情報: {e.__class__.__name__}")
+        # print(f"デバッグ情報: {e.__class__.__name__}")
+        traceback.print_exc()
         return {"error": error_message, "data": None}
 
-def generate_blog_article(transcript_data: list[dict], youtube_url: str, language: str = "ja", min_words: int = 2000, max_words: int = 2500) -> tuple[str | None, list | None, str | None]:
+def generate_blog_article(transcript_data: list[dict], youtube_url: str, no_timestamps: bool, language: str = "ja", min_words: int = 2000, max_words: int = 2500) -> tuple[str | None, list | None, str | None]:
     """文字起こしデータ (セグメントのリスト) を基にOpenAI APIを使ってブログ記事とタイムスタンプ情報を生成。
+    no_timestamps: Trueの場合、LLMへの指示と期待するJSON形式からタイムスタンプ関連部分を除外。
     min_words: 記事の最小目標文字数
     max_words: 記事の最大目標文字数
     戻り値: (ブログ記事文字列, タイムスタンプ情報リスト, エラーメッセージ)
@@ -114,20 +128,26 @@ def generate_blog_article(transcript_data: list[dict], youtube_url: str, languag
         end_time = start_time + duration
         text = segment.get('text', '').strip()
         if text: # 空のテキストセグメントはスキップ
-            formatted_transcript_for_llm.append(f"[Segment {i:03d} | Start: {start_time:.2f}s | End: {end_time:.2f}s] {text}")
+            # no_timestamps モードではセグメント情報はプロンプトに含めない
+            if no_timestamps:
+                formatted_transcript_for_llm.append(text)
+            else:
+                formatted_transcript_for_llm.append(f"[Segment {i:03d} | Start: {start_time:.2f}s | End: {end_time:.2f}s] {text}")
     
     if not formatted_transcript_for_llm:
         return None, None, "有効な文字起こしセグメントがありませんでした。"
 
-    transcript_string_for_llm = "\\n".join(formatted_transcript_for_llm)
+    transcript_string_for_llm = "\n".join(formatted_transcript_for_llm)
     
     # LLMへの指示 (プロンプト)
     word_count_instruction = f"2. 記事全体の文字数は{min_words}〜{max_words}字程度にしてください。"
 
-    prompt_content = f"""以下のYouTube動画の文字起こしを元に、日本語の解説ブログ記事を作成してください。
-文字起こしは各セグメントに [Segment ID | Start: 開始時間s | End: 終了時間s] の形式で情報が付与されています。
+    # プロンプトの共通部分を定義
+    intro_to_transcript_processing = "以下のYouTube動画の文字起こしを元に、日本語の解説ブログ記事を作成してください。"
+    if not no_timestamps:
+        intro_to_transcript_processing += "\n文字起こしは各セグメントに [Segment ID | Start: 開始時間s | End: 終了時間s] の形式で情報が付与されています。"
 
-ブログ記事の要件:
+    common_blog_requirements = f"""ブログ記事の要件:
 1. 読者が分かりやすいように、より詳細な説明や具体的な例を交えながら構成し、第三者視点で重要なポイントを深く掘り下げて強調してください。
 {word_count_instruction}
 3. タイトルの次に動画のURL ({youtube_url}) を文字列としてそのまま記載してください。
@@ -135,8 +155,18 @@ def generate_blog_article(transcript_data: list[dict], youtube_url: str, languag
 5. 文字起こし内容に関連するトピックを適宜マッシュアップし、独自の見解や意見、さらには具体的な事例や応用例を交えながら述べてください。
 6. 最後の項目は「## まとめ」として、記事全体の要点を簡潔に、かつ読者の行動を促すような形でまとめてください。
 7. 太字表現 (*) は使用しないでください。見出し (## や ###) は適切に使用してください。
+8. 生成するブログ記事の本文中には、文字起こしセグメントの情報（例: `[Segment 001 ...]`）を一切含めないでください。"""
 
-出力形式の要件:
+    if no_timestamps:
+        output_format_requirements = f"""出力形式の要件:
+生成するブログ記事の全文を、以下のJSON形式で出力してください。
+```json
+{{
+  "blog_article": "ここに生成されたブログ記事の全文をマークダウン形式で記述..."
+}}
+```"""
+    else: # Timestamps are required
+        output_format_requirements = f"""出力形式の要件:
 生成するブログ記事と、各段落が参照した文字起こしセグメントの情報を、以下のJSON形式で出力してください。
 ```json
 {{
@@ -157,11 +187,23 @@ def generate_blog_article(transcript_data: list[dict], youtube_url: str, languag
   - `paragraph_text_snippet`: LLMが判断した段落の冒頭の短いスニペット（照合用）。
   - `source_segment_ids`: その段落の生成根拠となった文字起こしセグメントのID（例: "Segment 001"）をリストで記述してください。複数のセグメントを参照した場合は、全て含めてください。段落が特定のセグメントに直接対応しない場合（例: 全体的な導入やまとめ、LLM独自の考察部分）は、`source_segment_ids` を空リスト `[]` としてください。
   - 「ポイント」セクションの箇条書きの各項目も、可能であればそれぞれを1つの「段落」として扱い、参照セグメントを記録してください。難しい場合は、「ポイント」全体を一つの段落として扱っても構いません。
-  - 見出し自体は `timeline_references` に含める必要はありません。本文の段落のみを対象とします。
+  - 見出し自体は `timeline_references` に含める必要はありません。本文の段落のみを対象とします。"""
+
+    prompt_content = f"""{intro_to_transcript_processing}
+{common_blog_requirements}
+{output_format_requirements}
 
 文字起こし:
 {transcript_string_for_llm}
 """
+
+    print("=== LLMに送信するプロンプト ===")
+    # print(prompt_content) # プロンプト全体は非常に長いため、通常はコメントアウト推奨
+    print("プロンプトの先頭部分:")
+    print(prompt_content[:1000] + "...") # 先頭1000文字と末尾500文字程度表示に修正
+    print("プロンプトの末尾部分:")
+    print("..." + prompt_content[-500:])
+    print("=============================")
 
     messages = [
         { 
@@ -175,7 +217,7 @@ def generate_blog_article(transcript_data: list[dict], youtube_url: str, languag
     ]
 
     try:
-        print("LLMにブログ記事とタイムスタンプ情報の生成をリクエストします...")
+        print(f"LLMにブログ記事{'とタイムスタンプ情報' if not no_timestamps else ''}の生成をリクエストします...")
         response = client.chat.completions.create(
             model=LLM_MODEL,
             messages=messages,
@@ -187,18 +229,16 @@ def generate_blog_article(transcript_data: list[dict], youtube_url: str, languag
         raw_response_content = response.choices[0].message.content.strip()
         
         # LLMからの応答（JSON文字列）をパース
-        import json
         try:
             parsed_response = json.loads(raw_response_content)
             blog_article_text = parsed_response.get("blog_article")
-            timeline_references_raw = parsed_response.get("timeline_references")
 
-            if not blog_article_text or not isinstance(timeline_references_raw, list):
-                print("エラー: LLMからの応答形式が不正です（blog_articleまたはtimeline_referencesが欠損）。")
+            if not blog_article_text:
+                print("エラー: LLMからの応答形式が不正です（blog_articleが欠損）。")
                 print(f"Raw response: {raw_response_content[:500]}...") # Log part of the raw response
-                return None, None, "LLMからの応答形式が不正です。"
+                return None, None, "LLMからの応答形式が不正です（blog_articleが欠損）。"
 
-            # Clean the blog article text from any [Segment ...] annotations
+            # Clean the blog article text from any [Segment ...] annotations, just in case
             if blog_article_text:
                 # Matches "[Segment" followed by any characters except "]" until "]"
                 # Handles multi-digit segment numbers and potential extra spaces.
@@ -206,7 +246,17 @@ def generate_blog_article(transcript_data: list[dict], youtube_url: str, languag
                 # Also remove any remaining empty lines that might result from the substitution
                 blog_article_text = re.sub(r"\n\s*\n", "\n\n", blog_article_text).strip()
 
-            # タイムスタンプ情報を整形 (source_segment_idsから実際の時間情報を復元)
+            if no_timestamps:
+                print("ブログ記事を正常に生成・パースしました。(タイムスタンプなし)")
+                return blog_article_text, None, None # タイムスタンプはNone
+
+            # no_timestampsではない場合、タイムスタンプ情報を処理
+            timeline_references_raw = parsed_response.get("timeline_references")
+            if not isinstance(timeline_references_raw, list):
+                print("エラー: LLMからの応答形式が不正です（timeline_referencesがリストではありません）。")
+                print(f"Raw response: {raw_response_content[:500]}...")
+                return blog_article_text, None, "LLMからの応答形式が不正です（timeline_references）。" # 記事は取れたかもしれないので返す
+
             final_timeline_references = []
             source_segments_map = {f"Segment {i:03d}": seg for i, seg in enumerate(transcript_data) if seg.get('text','').strip()}
 
@@ -239,8 +289,14 @@ def generate_blog_article(transcript_data: list[dict], youtube_url: str, languag
 
         except json.JSONDecodeError as json_e:
             print(f"LLMからの応答のJSONパースに失敗しました: {json_e}")
-            print(f"Raw response: {raw_response_content[:1000]}...") # Log part of the raw response
-            return None, None, f"LLM応答のJSONパース失敗: {json_e}"
+            # raw_response_content の内容をより詳細に出力
+            error_detail = f"Raw response content from LLM: {raw_response_content}"
+            print(error_detail) 
+            # no_timestampsの場合、JSONは単純なので、パース失敗時は記事本文を直接探す試みも可能だが、
+            # response_format="json_object" を使っているので、JSONとして成立しているはず。
+            # 成立していない場合はOpenAI API側の問題か、プロンプトの問題の可能性が高い。
+            # ここでは、パース失敗＝記事取得失敗とみなす。
+            return None, None, f"LLM応答のJSONパース失敗: {json_e}. {error_detail[:200]}..."
         except Exception as e_parse:
             print(f"LLM応答の処理中に予期せぬエラーが発生しました: {e_parse}")
             return None, None, f"LLM応答処理エラー: {e_parse}"
@@ -265,7 +321,6 @@ def save_timestamps_to_file(timestamps_data: list, filename: str):
         print("タイムスタンプデータが空のため、ファイル保存をスキップします。")
         return
     try:
-        import json
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(timestamps_data, f, ensure_ascii=False, indent=4)
         print(f"タイムスタンプ情報が {filename} に保存されました。")
@@ -321,7 +376,7 @@ def _synthesize_speech_for_chunk(
 
     while retry_count < max_retries and not success:
         try:
-            print(f"  - Processing chunk ({len(chunk)} chars) (Attempt {retry_count + 1}/{max_retries})...")
+            # print(f"  - Processing chunk ({len(chunk)} chars) (Attempt {retry_count + 1}/{max_retries})...") # 処理中の詳細ログは抑制
 
             # Exponential backoff for retries and general API calls
             current_wait = base_wait_time * (2 ** retry_count)
@@ -364,7 +419,7 @@ def _synthesize_speech_for_chunk(
                     f.write(buffer)
 
                 if os.path.exists(temp_file_path) and os.path.getsize(temp_file_path) > 1000: # Min 1KB check
-                    print(f"    Chunk synthesized successfully: {os.path.getsize(temp_file_path)} bytes.")
+                    # print(f"    Chunk synthesized successfully: {os.path.getsize(temp_file_path)} bytes.") # 成功時の詳細ログは抑制
                     success = True
                 else:
                     print(f"    Warning: Generated file is too small or missing ({os.path.getsize(temp_file_path) if os.path.exists(temp_file_path) else 'missing'}). Retrying...")
@@ -396,7 +451,7 @@ def text_to_speech(content, filename, voice=None):
         if not content or not content.strip():
             print("エラー: 入力テキストが空です。音声生成をスキップします。")
             return False
-        print(f"処理するテキストの合計長: {len(content)} 文字")
+        # print(f"処理するテキストの合計長: {len(content)} 文字") # 全体の文字数は抑制
 
         paragraphs = [p for p in content.split('\n') if p.strip()]
         if not paragraphs:
@@ -410,18 +465,18 @@ def text_to_speech(content, filename, voice=None):
         # Base wait time between API calls to manage rate limits
         base_wait_time = 1.5 # seconds 
 
-        print(f"テキストを {len(paragraphs)} 個の段落に分割して処理します")
+        print(f"テキストを {len(paragraphs)} 個の段落に分割して処理します") # 段落数は進捗として有用
 
         chunk_index = 0
         for i, paragraph in enumerate(paragraphs):
             if not paragraph.strip():
                 continue
             
-            print(f"Processing paragraph {i + 1}/{len(paragraphs)}...")
+            print(f"Processing paragraph {i + 1}/{len(paragraphs)}...") # 段落ごとの進捗は有用
             
             # Split paragraph into smaller chunks if needed
             chunks = _create_audio_chunks(paragraph, max_length=4000)
-            print(f"  Paragraph split into {len(chunks)} chunk(s).")
+            # print(f"  Paragraph split into {len(chunks)} chunk(s).") # チャンク数は抑制
 
             for j, chunk in enumerate(chunks):
                 temp_file = os.path.join(temp_dir, f"temp_{chunk_index}.mp3")
@@ -464,7 +519,7 @@ def text_to_speech(content, filename, voice=None):
 
             concat_cmd = f'ffmpeg -y -f concat -safe 0 -i "{concat_file}" -c copy "{speech_file_path}"'
             print("結合コマンドを実行中...")
-            print(f"  {concat_cmd}")
+            # print(f"  {concat_cmd}") # FFmpegコマンド自体の表示は抑制
             
             result = subprocess.run(concat_cmd, shell=True, capture_output=True, text=True, encoding='utf-8', errors='ignore')
             if result.returncode != 0:
@@ -505,9 +560,7 @@ def text_to_speech(content, filename, voice=None):
             try:
                 if os.path.exists(temp_dir):
                     shutil.rmtree(temp_dir)
-                    print("一時ファイルを削除しました。")
-                else:
-                    print("一時ディレクトリが見つからないため、削除をスキップしました。")
+                # print("一時ファイルを削除しました。") # 削除成功のログは抑制
             except Exception as cleanup_error:
                 print(f"一時ファイルの削除中にエラーが発生しました: {cleanup_error}")
             return True
@@ -650,7 +703,7 @@ def _build_ffmpeg_command(audio_file: str, output_file: str, image_file: str | N
             if bgm_files:
                 chosen_bgm = random.choice(bgm_files)
                 bgm_file_path = os.path.join(bgm_dir, chosen_bgm)
-                print(f"バックグラウンド音楽として {chosen_bgm} を使用します")
+                # print(f"バックグラウンド音楽として {chosen_bgm} を使用します") # 使用BGMファイル名の表示は抑制
                 bgm_input = f"-i \"{bgm_file_path}\""
                 # Inputs: 0=Image/Lavfi, 1=Speech, 2=BGM
                 # Loop BGM, set volume, mix with speech
@@ -699,7 +752,7 @@ def create_video_from_audio(audio_file, output_file, image_file=None, is_shorts=
         cmd = _build_ffmpeg_command(audio_file, output_file, image_file, is_shorts, use_bgm)
         
         print("実行するコマンド:")
-        print(f"  {cmd}")
+        # print(f"  {cmd}") # FFmpegコマンド自体の表示は抑制
         
         # Execute the FFmpeg command
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8', errors='ignore')
@@ -725,7 +778,6 @@ def create_video_from_audio(audio_file, output_file, image_file=None, is_shorts=
     except Exception as e:
         print(f"動画ファイル作成中に予期せぬエラーが発生しました: {e}")
         # Print traceback for unexpected errors
-        import traceback
         traceback.print_exc()
         return False
 
@@ -751,7 +803,7 @@ def _get_japanese_font_path() -> str | None:
 
     for path in font_paths:
         if os.path.exists(path):
-            print(f"Using font: {path}")
+            # print(f"Using font: {path}") # 使用フォントの表示は抑制
             return path
 
     print("Warning: Could not find a specific Japanese font. Defaulting to WordCloud's built-in font (may not render Japanese correctly).")
@@ -792,14 +844,14 @@ def create_wordcloud_image(text, output_path, is_shorts=False):
     """テキストからワードクラウド画像を生成"""
     try:
         width, height = (1080, 1920) if is_shorts else (1920, 1080)
-        print(f"Generating word cloud image ({width}x{height})...")
+        # print(f"Generating word cloud image ({width}x{height})...") # 画像生成開始のログは抑制
 
         # 1. Tokenize and count words using helper
         word_frequencies = _tokenize_and_count_japanese_words(text)
         if not word_frequencies:
             print("ワードクラウド生成に十分な単語が見つかりませんでした。")
             return False
-        print(f"Found {len(word_frequencies)} unique words for word cloud.")
+        # print(f"Found {len(word_frequencies)} unique words for word cloud.") # ユニーク単語数のログは抑制
 
         # 2. Find font path using helper
         font_path = _get_japanese_font_path()
@@ -833,7 +885,6 @@ def create_wordcloud_image(text, output_path, is_shorts=False):
 
     except Exception as e:
         print(f"ワードクラウド画像生成プロセス全体でエラーが発生しました: {e}")
-        import traceback
         traceback.print_exc()
         return False
 
@@ -888,6 +939,7 @@ def main():
         default=2500,
         help="ブログ記事の最大目標文字数 (デフォルト: 2500)"
     )
+    parser.add_argument("--no-timestamps", action="store_true", help="タイムスタンプ情報を生成・利用しない")
     
     args = parser.parse_args()
     youtube_url = args.youtube_url
@@ -941,9 +993,10 @@ def main():
     blog_article_text, timeline_references, error_message = generate_blog_article(
         transcript_data, 
         youtube_url, 
+        no_timestamps=args.no_timestamps, # Pass the no_timestamps argument
         language=fetched_language,
-        min_words=min_words_arg, # Pass the new argument
-        max_words=max_words_arg  # Pass the new argument
+        min_words=min_words_arg, 
+        max_words=max_words_arg
     )
     
     if error_message:
@@ -989,31 +1042,122 @@ def main():
         return
     print("音声ファイル生成成功。")
 
-    # --- 6. Prepare Image for Video --- 
-    video_image_path = image_file # Use provided image first
-    if not video_image_path: # If no image provided via args
-        if use_wordcloud:
-            print(f"\nワードクラウド画像を生成中 ({wordcloud_file})...")
-            if create_wordcloud_image(blog_article_text, wordcloud_file, is_shorts):
-                video_image_path = wordcloud_file # Use generated wordcloud
+    # 6. Prepare Image for Video (skip_tts_video でなく、音声ファイルが正常生成された場合)
+    if os.path.exists(speech_file) and os.path.getsize(speech_file) > 0:
+        print("\n--- 6. Prepare Image for Video ---")
+        video_image_path = args.image
+        if not video_image_path:
+            if args.wordcloud:
+                # print(f"\nワードクラウド画像を生成中 ({output_filenames['wordcloud']})...") # create_wordcloud_imageでメッセージが出るので抑制
+                if create_wordcloud_image(blog_article_text, output_filenames['wordcloud'], args.shorts):
+                    video_image_path = output_filenames['wordcloud']
+                else:
+                    print("ワードクラウド生成に失敗しました。デフォルトの黒背景を使用します。")
+                    video_image_path = None
             else:
-                print("ワードクラウド生成に失敗しました。デフォルトの黒背景を使用します。")
-                video_image_path = None # Fallback to black background
-        else:
-            print("\n画像指定なし、ワードクラウド無効のため、デフォルトの黒背景を使用します。")
-            video_image_path = None # Use black background
+                print("\n画像指定なし、ワードクラウド無効のため、デフォルトの黒背景を使用します。")
+                video_image_path = None
 
-    # --- 7. Create Video --- 
-    print(f"\n音声ファイルを動画に変換中 ({video_file})...")
-    create_video_from_audio(
-        speech_file, 
-        video_file, 
-        video_image_path, # This is either the user image, wordcloud, or None
-        is_shorts, 
-        use_bgm
-    )
-    
-    print("\n処理が完了しました。")
+        # 7. Create Video (skip_tts_video でなく、音声ファイルが正常生成された場合)
+        print("\n--- 7. Create Video ---")
+        video_file = output_filenames["video"]
+        # print(f"音声ファイルを動画に変換中 ({video_file})...") # create_video_from_audioでメッセージが出るので抑制
+        create_video_from_audio(
+            speech_file, 
+            video_file, 
+            video_image_path,
+            args.shorts, 
+            not args.no_bgm
+        )
+    else:
+        print("\n--- 6 & 7. 画像準備・動画作成 (スキップ) ---")
+        print("先行する音声ファイル生成に失敗したか、ファイルが空のため、画像準備と動画作成をスキップします。")
+
+    # --- 最終ファイル確認と情報表示 ---
+    # (この部分は skip_tts_video の影響を受けない。あくまで生成されたファイルの確認)
+    blog_article_created = os.path.exists(article_file)
+    # タイムスタンプファイルが期待されるのは、--no-timestamps が指定されていない場合のみ
+    timestamps_expected = not args.no_timestamps
+    timestamps_created = os.path.exists(timestamps_file) if timestamps_expected else True
+
+    print("\n--- 最終ファイル確認 ---")
+    if blog_article_created:
+        print(f"記事ファイル: {article_file} (作成済み)")
+    else:
+        print(f"記事ファイル: {article_file} (エラー: 未作成)")
+
+    if timestamps_expected:
+        if timestamps_created:
+            print(f"タイムスタンプファイル: {timestamps_file} (作成済み)")
+        else:
+            print(f"タイムスタンプファイル: {timestamps_file} (エラー: 未作成)")
+    else:
+        print(f"タイムスタンプファイル: ({timestamps_file} - 生成対象外)")
+
+
+    if not blog_article_created or (timestamps_expected and not timestamps_created):
+        error_message = "エラー: 必須ファイルが生成されませんでした。"
+        if not blog_article_created:
+            error_message += f"\n  - 記事ファイル ({article_file}) が見つかりません。"
+        if timestamps_expected and not timestamps_created:
+            error_message += f"\n  - タイムスタンプファイル ({timestamps_file}) が見つかりません。"
+        print(error_message)
+        # 以前はここで return していたが、blog_only の場合などは正常終了のパスもあるため、
+        # スクリプトの最後でまとめて終了するようにする。エラーメッセージ表示のみ行う。
+
+    # スクリプトの最後に移動した出力
+    if args.blog_only:
+        try:
+            with open(article_file, 'r', encoding='utf-8') as f:
+                print("\n--- 生成されたブログ記事 ---")
+                # print(f.read()) # blog_only の場合、記事内容は表示しないように変更
+                print("ブログ記事の内容はファイルに出力済みです。")
+                print("--- ブログ記事ここまで ---")
+        except Exception as e:
+            print(f"生成されたブログ記事の表示中にエラーが発生しました: {e}")
+
+    end_time = time.time() # main関数の最後でend_timeを取得
+    total_time = end_time - start_time_process
+    print(f"\n実行時間: {total_time // 60:.0f}分{total_time % 60:.2f}秒")
+
+    # 最終的な成功判定 (blog_only の場合はタイムスタンプは問わない)
+    success = False
+    if args.blog_only:
+        if blog_article_created:
+            success = True
+            print("ブログ記事の生成が完了しました。")
+        else:
+            print("エラー: ブログ記事の生成に失敗しました。")
+    elif args.no_timestamps: # ブログ記事のみが必須 (音声動画なし、タイムスタンプなし)
+        if blog_article_created:
+            success = True
+            print("ブログ記事の生成 (タイムスタンプなし) が完了しました。")
+        else:
+            print("エラー: ブログ記事の生成 (タイムスタンプなし) に失敗しました。")
+    elif args.skip_tts_video: # ブログ記事とタイムスタンプ(あれば)が必須 (音声動画スキップ)
+        if blog_article_created and (timestamps_created or args.no_timestamps):
+            success = True
+            print("ブログ記事とタイムスタンプ(該当する場合)の生成が完了しました。 (--skip-tts-video)")
+        else:
+            print("エラー: --skip-tts-video 指定でブログ記事またはタイムスタンプの生成に失敗しました。")
+    else: # 通常モード (ブログ記事とタイムスタンプが必須、音声動画も作る)
+        # この場合、音声ファイルや動画ファイルもチェック対象に含めるべきか？
+        # 現状のロジックでは、記事とタイムスタンプがあれば成功とみなし、音声動画は後続ステップ扱い。
+        # より厳密にするなら、ここで output_filenames["audio"] や output_filenames["video"] の存在も確認する。
+        # ただし、create_video_from_audio の成否は bool で返ってこないので、ファイル存在で判断するしかない。
+        audio_created = os.path.exists(speech_file) and os.path.getsize(speech_file) > 0
+        video_created = os.path.exists(video_file) and os.path.getsize(video_file) > 0
+        if blog_article_created and timestamps_created and audio_created and video_created:
+            success = True
+            print("ブログ記事、タイムスタンプ、音声、動画の全ての生成が完了しました。")
+        else:
+            print("エラー: ブログ記事、タイムスタンプ、音声、または動画のいずれかの生成に失敗しました。")
+            if not blog_article_created: print("  - ブログ記事が未生成です。")
+            if not timestamps_created: print("  - タイムスタンプが未生成です。 (--no-timestamps 未指定時)")
+            if not audio_created: print("  - 音声ファイルが未生成または空です。")
+            if not video_created: print("  - 動画ファイルが未生成または空です。")
+
+    # 必要に応じてここで exit(1) なども検討できるが、呼び出し元スクリプトで判定するのでここではメッセージのみ。
 
 if __name__ == "__main__":
     main()

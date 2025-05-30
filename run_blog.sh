@@ -76,7 +76,7 @@ if [ "$BLOG_ONLY" = true ]; then
 else
     # メディア生成モードの場合のデフォルトオプション
     EXTRA_ARGS+=(--wordcloud)
-    EXTRA_ARGS+=(--min-words 2500 --max-words 3000) # メディア生成でも記事は長めに
+    EXTRA_ARGS+=(--min-words 2000 --max-words 2500) # メディア生成でも記事は長めに
     # ここで --no-bgm や --shorts などのオプションを追加することも可能
     # 例: if [ <no-bgmが指定されたか> ]; then EXTRA_ARGS="$EXTRA_ARGS --no-bgm"; fi
 fi
@@ -85,8 +85,8 @@ fi
 YOUTUBE_URL="https://www.youtube.com/watch?v=$VIDEO_ID"
 
 # コマンドの実行
-echo "YouTube URL: $YOUTUBE_URL"
-echo "言語コード: $LANGUAGE"
+# echo "YouTube URL: $YOUTUBE_URL"
+# echo "言語コード: $LANGUAGE"
 
 if [ "$BLOG_ONLY" = true ]; then
     echo "ブログ記事のみ生成モードで実行します..."
