@@ -5,6 +5,7 @@ YouTube の字幕を取得し、OpenAI API を使用して詳細な日本語ブ�
 ## 主な機能
 
 - YouTube 動画から字幕を取得（URL 言語コードを指定）
+- **🆕 ローカル転写機能**: YouTube動画をダウンロードしてWhisperで転写生成
 - OpenAI API を使用して 2000〜3000 文字の日本語ブログ記事を生成
 - ブログ記事をテキストファイルとして保存
 - テキストを音声に変換（OpenAI Text-to-Speech API 使用）
@@ -23,6 +24,9 @@ YouTube の字幕を取得し、OpenAI API を使用して詳細な日本語ブ�
   - `wordcloud`
   - `janome`
   - `numpy`
+  - `yt-dlp` (ローカル転写機能用)
+  - `openai-whisper` (ローカル転写機能用)
+  - `pydub` (音声処理用)
 - OpenAI API キー
 - FFmpeg (動画生成用)
 
@@ -55,19 +59,41 @@ YouTube の字幕を取得し、OpenAI API を使用して詳細な日本語ブ�
 
 ## 使用方法
 
+### 通常の字幕取得モード
+
 以下のコマンドでスクリプトを実行:
 
 ```bash
 python youtube2blog.py <言語コード> <YouTube動画URL> [オプション]
 ```
 
+### 🆕 ローカル転写モード
+
+YouTube Transcript APIの問題を回避し、より高品質な転写を得るためのローカル転写モードが利用できます：
+
+```bash
+python youtube2blog_local.py <YouTube動画URL> [オプション]
+```
+
+**または便利なシェルスクリプトを使用:**
+
+```bash
+./run_youtube2blog_local.sh <YouTube動画URL> [whisper_model] [オプション]
+```
+
 ### 引数
 
+**通常モード:**
 - **`言語コード`**: 字幕の言語コード (例: `en`, `ja`)
 - **`YouTube動画URL`**: 字幕を含む YouTube 動画の URL
 
+**ローカル転写モード:**
+- **`YouTube動画URL`**: 転写したい YouTube 動画の URL
+- **`whisper_model`**: 使用するWhisperモデル (tiny, base, small, medium, large)
+
 ### オプション
 
+**通常モード:**
 - **`--image <画像パス>`**: 動画作成に使用するカスタム画像ファイルのパス
 - **`--shorts`**: YouTube Shorts 形式（縦長 9:16）の動画を生成
 - **`--voice <音声名>`**: 使用する音声を指定（指定しない場合はランダム選択）
@@ -76,8 +102,15 @@ python youtube2blog.py <言語コード> <YouTube動画URL> [オプション]
 - **`--no-bgm`**: バックグラウンド音楽を使用しない
 - **`--blog-only`**: ブログ記事のみを生成し、音声・動画は生成しない
 
+**ローカル転写モード:**
+- **`--whisper-model <モデル>`**: 使用するWhisperモデル (tiny, base, small, medium, large)
+- **`--blog-only`**: ブログ記事のみを生成し、音声・動画は生成しない
+- **`--min-words <数値>`**: ブログ記事の最小文字数 (デフォルト: 2000)
+- **`--max-words <数値>`**: ブログ記事の最大文字数 (デフォルト: 2500)
+
 ### 例
 
+**通常モード:**
 1. 日本語字幕を取得してブログ記事と音声付き動画を生成:
 
 ```bash
@@ -88,6 +121,25 @@ python youtube2blog.py ja https://www.youtube.com/watch?v=example_video_id
 
 ```bash
 python youtube2blog.py ja https://www.youtube.com/watch?v=example_video_id --shorts --wordcloud --voice nova
+```
+
+**ローカル転写モード:**
+1. 基本的な使用（baseモデル使用）:
+
+```bash
+python youtube2blog_local.py https://www.youtube.com/watch?v=example_video_id
+```
+
+2. シェルスクリプトを使用してmediumモデルでブログ記事のみ生成:
+
+```bash
+./run_youtube2blog_local.sh https://www.youtube.com/watch?v=example_video_id medium --blog-only
+```
+
+3. 高品質モデルを使用:
+
+```bash
+python youtube2blog_local.py https://www.youtube.com/watch?v=example_video_id --whisper-model large
 ```
 
 ### 出力ファイル
@@ -114,7 +166,17 @@ youtube2blog/
 
 ## 注意点
 
+**通常モード:**
 - 指定された YouTube 動画に字幕が利用可能である必要があります。そうでない場合、文字起こしは失敗します。
+- 最近YouTube Transcript APIが一部の環境（特にクラウドサーバー）でブロックされる問題が発生しています。この場合はローカル転写モードを使用してください。
+
+**ローカル転写モード:**
+- 動画のダウンロードとWhisperによる転写処理が必要なため、通常モードよりも時間がかかります。
+- Whisperモデルは初回使用時にダウンロードされるため、インターネット接続が必要です。
+- 長い動画の場合、相当な処理時間と計算リソースが必要になります。
+- より高品質な転写を得るにはlarge モデルを使用しますが、GPUが推奨されます。
+
+**共通:**
 - OpenAI API キーが必要で、API 使用料が発生する場合があります。
 - 長い動画の場合、トークン制限により、トランスクリプトを小さな部分に分割するための追加のロジックが必要になることがあります。
 - OpenAI の Text-to-Speech API は使用量に応じて課金される場合があります。
