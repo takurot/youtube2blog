@@ -27,7 +27,7 @@ class TestYoutube2BlogLocalJA(unittest.TestCase):
         self.assertTrue(filenames['text'].endswith("_article.txt"))
 
     def test_generate_blog_article_empty_transcript(self):
-        article, err = self.ja.generate_blog_article([], "https://youtu.be/aaaaaaaaaaa", no_timestamps=True, language="ja")
+        article, err = self.ja.generate_blog_article([], "https://youtu.be/aaaaaaaaaaa", language="ja")
         self.assertIsNone(article)
         self.assertIsNotNone(err)
 
@@ -54,7 +54,7 @@ class TestYoutube2BlogLocalZH(unittest.TestCase):
         self.assertTrue(filenames['text'].endswith("_article.txt"))
 
     def test_generate_blog_article_empty_transcript(self):
-        article, err = self.zh.generate_blog_article_zh([], "https://youtu.be/bbbbbbbbbbb", no_timestamps=True, language="zh")
+        article, err = self.zh.generate_blog_article_zh([], "https://youtu.be/bbbbbbbbbbb", language="zh")
         self.assertIsNone(article)
         self.assertIsNotNone(err)
 
