@@ -183,10 +183,15 @@ def fetch_transcript_local(youtube_url: str, whisper_model: str = "base") -> dic
             except Exception as cleanup_error:
                 print(f"一時ディレクトリの削除に失敗しました: {cleanup_error}")
 
-def generate_blog_article(transcript_data: list[dict], youtube_url: str, no_timestamps: bool, language: str = "ja", min_words: int = 2500, max_words: int = 3000) -> tuple[str | None, str | None]:
-    """
-    文字起こしデータを基にOpenAI APIを使ってブログ記事を生成
-    """
+def generate_blog_article(
+    transcript_data: list[dict],
+    youtube_url: str,
+    no_timestamps: bool,
+    language: str = "ja",
+    min_words: int = 2500,
+    max_words: int = 3000,
+) -> tuple[str | None, str | None]:
+    """文字起こしデータを基に OpenAI API を使ってブログ記事を生成（日本語/中国語対応）"""
     if not transcript_data:
         return None, "文字起こしデータが空です。"
 
@@ -202,15 +207,36 @@ def generate_blog_article(transcript_data: list[dict], youtube_url: str, no_time
     transcript_string_for_llm = "\n".join(formatted_transcript_for_llm)
 
     # 言語に応じた指示を生成
-    if language == "ja" or language == "japanese":
-        word_count_instruction = f"2. 記事全体の文字数は{min_words}〜{max_words}字程度にしてください。"
-        intro_to_transcript_processing = "以下のYouTube動画の文字起こしを元に、日本語の解説ブログ記事を作成してください。"
-        target_language = "日本語"
+    if language in ("zh", "chinese", "zh-cn", "zh-tw"):
+        word_count_instruction = f"2. 请将全文控制在约{min_words}～{max_words}字。"
+        intro_to_transcript_processing = (
+            "请基于以下 YouTube 视频的逐字稿，撰写一篇中文解读型博客文章。"
+            "所有段落（包括标题）必须使用简体中文输出，除品牌英文名/符号名（如 @cosme、Dior）外，不得混用日文或英文。"
+            "若逐字稿或视频标题中包含日文，请翻译为自然的简体中文进行表达；标点请使用中文标点。"
+        )
+        common_blog_requirements = f"""写作要求:
+1. 采用第三人称与客观分析视角，穿插细节、示例与背景信息，突出重点并深入展开。
+{word_count_instruction}
+3. 在标题之后，直接写出视频的 URL（{youtube_url}）作为单独一行文本。
+4. 第一节使用二级标题“## 要点”，以要点式列出核心论点与洞见；每条须具体、信息密度高，使读者仅读此节即可把握全貌。
+5. 正文中可适度引入相关主题，给出独到见解、案例与应用，进行合理的延展与对比。
+6. 最后一节使用二级标题“## 总结”，用简洁有力的语言收束全文，并提出可执行建议。
+7. 不要使用加粗符号（*）；请合理使用“##”“###”等标题层级。
+8. 生成的正文中不要包含任何转录段落标记（例如: [Segment 001 ...]）。"""
+        output_format_requirements = (
+            """输出格式要求:
+请将生成的整篇博客文章以如下 JSON 结构输出:
+```json
+{
+  "blog_article": "这里填写生成的整篇博客文章（使用 Markdown 格式）"
+}
+```"""
+        )
+        system_prompt = "你是一名专业中文博客作者，能够严格按照指示生成高质量内容，并以指定的 JSON 结构输出。"
     else:
         word_count_instruction = f"2. 記事全体の文字数は{min_words}〜{max_words}字程度にしてください。"
-        intro_to_transcript_processing = f"以下のYouTube動画の文字起こし（言語: {language}）を元に、日本語の解説ブログ記事を作成してください。"
-        target_language = "日本語"
-    common_blog_requirements = f"""ブログ記事の要件:
+        intro_to_transcript_processing = "以下のYouTube動画の文字起こしを元に、日本語の解説ブログ記事を作成してください。"
+        common_blog_requirements = f"""ブログ記事の要件:
 1. 読者が分かりやすいように、より詳細な説明や具体的な例を交えながら構成し、第三者視点で重要なポイントを深く掘り下げて強調してください。
 {word_count_instruction}
 3. タイトルの次に動画のURL ({youtube_url}) を文字列としてそのまま記載してください。
@@ -219,14 +245,14 @@ def generate_blog_article(transcript_data: list[dict], youtube_url: str, no_time
 6. 最後の項目は「## まとめ」として、記事全体の要点を簡潔に、かつ読者の行動を促すような形でまとめてください。
 7. 太字表現 (*) は使用しないでください。見出し (## や ###) は適切に使用してください。
 8. 生成するブログ記事の本文中には、文字起こしセグメントの情報（例: `[Segment 001 ...]`）を一切含めないでください。"""
-
-    output_format_requirements = f"""出力形式の要件:
+        output_format_requirements = f"""出力形式の要件:
 生成するブログ記事の全文を、以下のJSON形式で出力してください。
 ```json
 {{
   "blog_article": "ここに生成されたブログ記事の全文をマークダウン形式で記述..."
 }}
 ```"""
+        system_prompt = "あなたはプロのブロガーであり、指示された形式で情報を正確に出力できるアシスタントです。"
 
     prompt_content = f"""{intro_to_transcript_processing}
 {common_blog_requirements}
@@ -237,8 +263,8 @@ def generate_blog_article(transcript_data: list[dict], youtube_url: str, no_time
 """
 
     messages = [
-        {"role": "system", "content": "あなたはプロのブロガーであり、指示された形式で情報を正確に出力できるアシスタントです。"},
-        {"role": "user", "content": prompt_content}
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": prompt_content},
     ]
 
     try:
@@ -264,7 +290,13 @@ def generate_blog_article(transcript_data: list[dict], youtube_url: str, no_time
             # セグメント注釈を削除
             blog_article_text = re.sub(r"\s*\[Segment[^\]]+\]\s*", "", blog_article_text)
             blog_article_text = re.sub(r"\n\s*\n", "\n\n", blog_article_text).strip()
-            
+
+            # 中国語出力時の日本語混在を検出（ひらがな/カタカナ）し、必要ならリライト
+            if language in ("zh", "chinese", "zh-cn", "zh-tw"):
+                if re.search(r"[\u3040-\u309F\u30A0-\u30FF]", blog_article_text):
+                    print("検出: 中国語記事に日本語が混在。中国語のみに統一します…")
+                    blog_article_text = _refine_to_simplified_chinese(blog_article_text)
+
             print("ブログ記事を正常に生成・パースしました。")
             return blog_article_text, None
             
@@ -276,6 +308,43 @@ def generate_blog_article(transcript_data: list[dict], youtube_url: str, no_time
         error_msg = f"ブログ記事の生成中にエラーが発生しました: {e_llm}"
         print(error_msg)
         return None, error_msg
+
+
+def _refine_to_simplified_chinese(draft_text: str) -> str:
+    """混在した非中文（特に日文）を除去し、全文を簡体字中文に統一するフォールバック整形。"""
+    try:
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "你是专业的中文编辑。请将用户提供的整段文本重写为纯简体中文，"
+                    "不得包含任何日文（平假名/片假名）或英文句子。品牌名如 @cosme、Dior 可保留。"
+                    "保持 Markdown 结构（标题/列表），所有文字与标点均使用简体中文；输出 JSON，键为 blog_article。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": "请重写为纯简体中文：\n\n" + draft_text,
+            },
+        ]
+        response = client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=messages,
+            temperature=0.3,
+            max_tokens=4095,
+            response_format={"type": "json_object"},
+        )
+        raw = response.choices[0].message.content.strip()
+        refined = json.loads(raw).get("blog_article")
+        if not refined:
+            return draft_text
+        refined = re.sub(r"\n\s*\n", "\n\n", refined).strip()
+        # 最終チェック：まだ日本語が残っていれば原文を返す（安全策）
+        if re.search(r"[\u3040-\u309F\u30A0-\u30FF]", refined):
+            return draft_text
+        return refined
+    except Exception:
+        return draft_text
 
 def save_to_file(content, filename):
     """生成されたブログ記事をファイルに保存"""
