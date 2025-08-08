@@ -8,11 +8,10 @@ show_usage() {
     echo "例:"
     echo "  $0 'https://www.youtube.com/watch?v=example'"
     echo "  $0 'https://www.youtube.com/watch?v=example' medium"
-    echo "  $0 'https://www.youtube.com/watch?v=example' base --blog-only"
+    echo "  $0 'https://www.youtube.com/watch?v=example' base"
     echo ""
     echo "Whisperモデル: tiny, base, small, medium, large (デフォルト: base)"
     echo "オプション:"
-    echo "  --blog-only     ブログ記事のみを生成"
     echo "  --min-words N   最小文字数 (デフォルト: 2000)"
     echo "  --max-words N   最大文字数 (デフォルト: 2500)"
     echo ""
@@ -83,7 +82,7 @@ main() {
     source .env/bin/activate
 
     echo "Python スクリプトを実行中..."
-    python3 youtube2blog_local_zh.py "$youtube_url" --whisper-model "$whisper_model" $additional_args
+    python3 youtube2blog_local.py "$youtube_url" --whisper-model "$whisper_model" --output-language zh $additional_args
 
     if [ $? -eq 0 ]; then
         echo ""
