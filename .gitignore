@@ -9,3 +9,4 @@ env
 token.json
 token_*.json
 client_secrets.json
+.env/
