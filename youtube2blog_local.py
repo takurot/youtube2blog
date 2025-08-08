@@ -355,39 +355,33 @@ def save_to_file(content, filename):
     except Exception as e:
         print(f"ファイル保存中にエラーが発生しました: {e}")
 
-def _generate_output_filenames(youtube_url: str, is_shorts: bool) -> dict[str, str]:
-    """動画IDとオプションに基づいて出力ファイル名を生成"""
+def _generate_output_filenames(youtube_url: str, output_language: str = "ja") -> dict[str, str]:
+    """動画IDとオプションに基づいて出力ファイル名を生成（中国語は _zh サフィックス）"""
     try:
         video_id = get_video_id(youtube_url)
     except ValueError as e:
         print(f"ファイル名生成エラー: {e}")
-        return {
-            'text': None, 'audio_text': None, 'audio': None,
-            'wordcloud': None, 'video': None, 'timestamps': None
-        }
+        return {'text': None}
     
     today = datetime.now().strftime('%Y%m%d')
-    base_name = f"{today}_blog_local_{video_id}"
+    lang_suffix = "_zh" if output_language in ("zh", "chinese", "zh-cn", "zh-tw") else ""
+    base_name = f"{today}_blog_local{lang_suffix}_{video_id}"
     
     filenames = {
         'text': f"{base_name}_article.txt",
-        'audio_text': f"{base_name}_audio_text.txt",
-        'audio': f"{base_name}_audio.mp3",
-        'wordcloud': f"{base_name}_wordcloud.png",
-        'video': f"{base_name}_video{'_shorts' if is_shorts else ''}.mp4",
-        'timestamps': f"{base_name}_timestamps.json"
     }
     
     return filenames
 
 def main():
-    parser = argparse.ArgumentParser(description="YouTubeからローカルで文字起こしを生成してブログ記事を作成するスクリプト")
+    parser = argparse.ArgumentParser(description="YouTubeからローカルで文字起こしを生成してブログ記事を作成するスクリプト（日本語/中国語対応）")
     parser.add_argument("youtube_url", help="YouTube動画のURLを指定")
     parser.add_argument("--whisper-model", default="base", 
                        choices=["tiny", "base", "small", "medium", "large"],
                        help="使用するWhisperモデル (デフォルト: base)")
-    parser.add_argument("--blog-only", action="store_true", 
-                       help="ブログ記事のみを生成し、音声・動画は生成しない")
+    parser.add_argument("--output-language", default="ja", 
+                       choices=["ja", "zh"],
+                       help="出力するブログ記事の言語 (ja または zh)")
     parser.add_argument("--min-words", type=int, default=2000, 
                        help="ブログ記事の最小目標文字数 (デフォルト: 2000)")
     parser.add_argument("--max-words", type=int, default=2500, 
@@ -398,7 +392,7 @@ def main():
     start_time = time.time()
     
     # 出力ファイル名を生成
-    output_filenames = _generate_output_filenames(args.youtube_url, False)
+    output_filenames = _generate_output_filenames(args.youtube_url, args.output_language)
     if any(value is None for value in output_filenames.values()):
         print("ファイル名の生成に失敗しました。処理を中断します。")
         return
@@ -408,6 +402,7 @@ def main():
     print(f"\n=== YouTube動画からローカルで文字起こしを生成 ===")
     print(f"動画URL: {args.youtube_url}")
     print(f"Whisperモデル: {args.whisper_model}")
+    print(f"出力言語: {args.output_language}")
     
     # ローカルでトランスクリプトを生成
     print("\n文字起こしを生成中...")
@@ -425,12 +420,12 @@ def main():
     print(f"文字起こし生成成功。セグメント数: {len(transcript_data)}")
     
     # ブログ記事を生成
-    print("\nブログ記事を生成中...")
+    print(f"\nブログ記事（{args.output_language}）を生成中...")
     blog_article_text, error_message = generate_blog_article(
         transcript_data,
         args.youtube_url,
         no_timestamps=True,
-        language="ja",
+        language=args.output_language,
         min_words=args.min_words,
         max_words=args.max_words
     )
