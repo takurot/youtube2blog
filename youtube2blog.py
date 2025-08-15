@@ -110,7 +110,7 @@ def fetch_transcript(youtube_url, language="en"):
         traceback.print_exc()
         return {"error": error_message, "data": None}
 
-def generate_blog_article(transcript_data: list[dict], youtube_url: str, no_timestamps: bool, language: str = "ja", min_words: int = 2000, max_words: int = 2500) -> tuple[str | None, str | None]:
+def generate_blog_article(transcript_data: list[dict], youtube_url: str, no_timestamps: bool, language: str = "ja", min_words: int = 2500, max_words: int = 3000) -> tuple[str | None, str | None]:
     """文字起こしデータ (セグメントのリスト) を基にOpenAI APIを使ってブログ記事を生成。
     no_timestamps: Trueの場合、LLMへの指示と期待するJSON形式からタイムスタンプ関連部分を除外。
     min_words: 記事の最小目標文字数
@@ -796,8 +796,8 @@ def main():
     parser.add_argument("--wordcloud", action="store_true", help="ワードクラウド画像を生成して使用する")
     parser.add_argument("--no-bgm", action="store_true", help="バックグラウンド音楽を使用しない")
     parser.add_argument("--blog-only", action="store_true", help="ブログ記事のみを生成し、音声・動画は生成しない")
-    parser.add_argument("--min-words", type=int, default=2000, help="ブログ記事の最小目標文字数 (デフォルト: 2000)")
-    parser.add_argument("--max-words", type=int, default=2500, help="ブログ記事の最大目標文字数 (デフォルト: 2500)")
+    parser.add_argument("--min-words", type=int, default=2500, help="ブログ記事の最小目標文字数 (デフォルト: 2500)")
+    parser.add_argument("--max-words", type=int, default=3000, help="ブログ記事の最大目標文字数 (デフォルト: 3000)")
     args = parser.parse_args()
     youtube_url = args.youtube_url
     language = args.language
