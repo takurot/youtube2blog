@@ -13,8 +13,8 @@ show_usage() {
     echo "Whisperモデル: tiny, base, small, medium, large (デフォルト: base)"
     echo "オプション:"
     echo "  --blog-only     ブログ記事のみを生成"
-    echo "  --min-words N   最小文字数 (デフォルト: 2000)"
-    echo "  --max-words N   最大文字数 (デフォルト: 2500)"
+    echo "  --min-words N   最小文字数 (デフォルト: 2500)"
+    echo "  --max-words N   最大文字数 (デフォルト: 3000)"
     echo ""
 }
 

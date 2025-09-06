@@ -375,10 +375,10 @@ def main():
     parser.add_argument("--output-language", default="ja", 
                        choices=["ja", "zh"],
                        help="出力するブログ記事の言語 (ja または zh)")
-    parser.add_argument("--min-words", type=int, default=2000, 
-                       help="ブログ記事の最小目標文字数 (デフォルト: 2000)")
-    parser.add_argument("--max-words", type=int, default=2500, 
-                       help="ブログ記事の最大目標文字数 (デフォルト: 2500)")
+    parser.add_argument("--min-words", type=int, default=2500, 
+                       help="ブログ記事の最小目標文字数 (デフォルト: 2500)")
+    parser.add_argument("--max-words", type=int, default=3000, 
+                       help="ブログ記事の最大目標文字数 (デフォルト: 3000)")
     
     args = parser.parse_args()
     
