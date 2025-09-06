@@ -464,6 +464,58 @@ python youtube2blog.py ja "https://www.youtube.com/watch?v=VIDEO_ID" --wordcloud
 
 これにより、音声合成エンジンがマークダウン記号を読み上げてしまう問題を防ぎ、より自然な音声出力が可能になります。
 
+## バッチ処理機能
+
+複数のYouTube動画を一度に処理するためのバッチ処理機能を提供しています。
+
+### 使用方法
+
+```bash
+python batch_youtube2blog.py <URLリストファイル> [オプション]
+```
+
+### 引数
+
+- **URLリストファイル**: 処理するYouTube動画のURLを1行に1つずつ記述したテキストファイル
+
+### オプション
+
+- **`--whisper-model`**: 使用するWhisperモデル (tiny, base, small, medium, large) (デフォルト: base)
+- **`--output-language`**: 出力するブログ記事の言語 (ja または zh) (デフォルト: ja)
+- **`--min-words`**: ブログ記事の最小目標文字数 (デフォルト: 3000)
+- **`--max-words`**: ブログ記事の最大目標文字数 (デフォルト: 3500)
+- **`--delay`**: URL処理間の待機時間（秒） (デフォルト: 5)
+- **`--continue-on-error`**: エラーが発生しても次のURLの処理を続行する
+
+### 使用例
+
+```bash
+# 基本的な使用
+python batch_youtube2blog.py url_list.txt
+
+# 高品質モデルと中国語出力で実行
+python batch_youtube2blog.py url_list.txt --whisper-model large --output-language zh
+
+# エラー時も継続して処理
+python batch_youtube2blog.py url_list.txt --continue-on-error
+```
+
+### URLリストファイルの形式
+
+```
+# これはコメント行です
+https://www.youtube.com/watch?v=example1
+https://www.youtube.com/watch?v=example2
+# 空行は無視されます
+https://www.youtube.com/watch?v=example3
+```
+
+### 出力
+
+- 各動画に対して個別にブログ記事ファイルが生成されます
+- 処理ログは`batch_youtube2blog.log`に記録されます
+- 処理完了時に成功・失敗の統計情報が表示されます
+
 ## コマンドラインオプション
 
 - `--image`: 動画作成に使用する静止画像ファイルを指定
