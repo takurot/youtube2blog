@@ -15,7 +15,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 client = OpenAI()
-LLM_MODEL = "chatgpt-4o-latest"
+# LLM_MODEL = "chatgpt-4o-latest"
+LLM_MODEL = "gpt-5-mini"
 
 # 利用可能な音声のリスト
 AVAILABLE_VOICES = ["alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"]
@@ -265,8 +266,7 @@ def generate_blog_article(
         response = client.chat.completions.create(
             model=LLM_MODEL,
             messages=messages,
-            temperature=0.5,
-            max_tokens=4095,
+            max_completion_tokens=4095,
             response_format={"type": "json_object"}
         )
         
@@ -323,8 +323,7 @@ def _refine_to_simplified_chinese(draft_text: str) -> str:
         response = client.chat.completions.create(
             model=LLM_MODEL,
             messages=messages,
-            temperature=0.3,
-            max_tokens=4095,
+            max_completion_tokens=4095,
             response_format={"type": "json_object"},
         )
         raw = response.choices[0].message.content.strip()

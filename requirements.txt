@@ -30,3 +30,6 @@ google-auth-oauthlib>=1.0.0
 yt-dlp>=2024.1.1
 openai-whisper>=20240731
 pydub>=0.25.1
+EbookLib==0.18
+Markdown==3.6
+beautifulsoup4==4.12.3
