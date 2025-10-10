@@ -62,23 +62,19 @@ def run_youtube2blog_local(url: str, args: Dict) -> bool:
         
         logger.info(f"実行コマンド: {' '.join(cmd)}")
         
-        # サブプロセスで実行
+        # サブプロセスで実行（リアルタイム出力）
         result = subprocess.run(
             cmd,
-            capture_output=True,
+            capture_output=False,  # リアルタイムで出力を表示
             text=True,
             encoding='utf-8'
         )
         
         if result.returncode == 0:
             logger.info(f"✅ URL処理成功: {url}")
-            if result.stdout:
-                logger.info(f"出力: {result.stdout.strip()}")
             return True
         else:
             logger.error(f"❌ URL処理失敗: {url}")
-            if result.stderr:
-                logger.error(f"エラー: {result.stderr.strip()}")
             return False
             
     except Exception as e:
@@ -109,13 +105,13 @@ def main():
         "--min-words",
         type=int,
         default=3000,
-        help="ブログ記事の最小目標文字数 (デフォルト: 2000)"
+        help="ブログ記事の最小目標文字数 (デフォルト: 3000)"
     )
     parser.add_argument(
         "--max-words",
         type=int,
         default=3500,
-        help="ブログ記事の最大目標文字数 (デフォルト: 2500)"
+        help="ブログ記事の最大目標文字数 (デフォルト: 3500)"
     )
     parser.add_argument(
         "--delay",
