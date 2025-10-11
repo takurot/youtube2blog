@@ -402,6 +402,8 @@ def main():
                        help="ブログ記事の最小目標文字数 (デフォルト: 2500)")
     parser.add_argument("--max-words", type=int, default=3000, 
                        help="ブログ記事の最大目標文字数 (デフォルト: 3000)")
+    parser.add_argument("--output-dir", default=".", 
+                       help="生成物を保存する出力ディレクトリ (デフォルト: カレントディレクトリ)")
     
     args = parser.parse_args()
     
@@ -413,7 +415,14 @@ def main():
         logger.error("ファイル名の生成に失敗しました。処理を中断します。")
         return
     
-    article_file = output_filenames['text']
+    # 出力ディレクトリを作成し、パスを結合
+    try:
+        os.makedirs(args.output_dir, exist_ok=True)
+    except Exception as e:
+        logger.error("出力ディレクトリの作成に失敗しました: %s", e)
+        return
+
+    article_file = os.path.join(args.output_dir, output_filenames['text'])
     
     logger.info("\n=== YouTube動画からローカルで文字起こしを生成 ===")
     logger.info("動画URL: %s", args.youtube_url)
