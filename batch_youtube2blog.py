@@ -59,6 +59,8 @@ def run_youtube2blog_local(url: str, args: Dict) -> bool:
             cmd.extend(['--min-words', str(args['min_words'])])
         if args.get('max_words'):
             cmd.extend(['--max-words', str(args['max_words'])])
+        if args.get('output_dir'):
+            cmd.extend(['--output-dir', args['output_dir']])
         
         logger.info(f"実行コマンド: {' '.join(cmd)}")
         
@@ -114,6 +116,11 @@ def main():
         help="ブログ記事の最大目標文字数 (デフォルト: 3500)"
     )
     parser.add_argument(
+        "--output-dir",
+        default='.',
+        help="生成物の出力ディレクトリ（デフォルト: カレントディレクトリ）"
+    )
+    parser.add_argument(
         "--delay",
         type=int,
         default=5,
@@ -148,7 +155,8 @@ def main():
         'whisper_model': args.whisper_model,
         'output_language': args.output_language,
         'min_words': args.min_words,
-        'max_words': args.max_words
+        'max_words': args.max_words,
+        'output_dir': args.output_dir,
     }
     
     logger.info("=== バッチ処理開始 ===")
