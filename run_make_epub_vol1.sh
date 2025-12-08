@@ -18,20 +18,29 @@ OUTPUT_DIR="$PROJECT_ROOT/output"
 OUTPUT_PATH="$OUTPUT_DIR/millionaires_vol1.epub"
 
 TITLE="億万長者のリアル Vol.1"
-AUTHOR="youtube2blog 編集部"
+AUTHOR="辻川卓朗"
 LANG="ja"
 DESCRIPTION="ウォール街で出会った成功者へのインタビュー要点を精選。地味で堅実なキャッシュフロービジネス、目的意識、ネットワークの力などを体系化。"
-COVER=""
+COVER="/Volumes/SSD2TB_DATA/src/youtube2blog/millionaires/backup/vol1/vol1.png"
 
 mkdir -p "$OUTPUT_DIR"
 
-$PYTHON "$PROJECT_ROOT/make_epub_from_dir.py" "$INPUT_DIR" \
-  --title "$TITLE" \
-  --author "$AUTHOR" \
-  --lang "$LANG" \
-  --description "$DESCRIPTION" \
-  ${COVER:+--cover "$COVER"} \
-  --output "$OUTPUT_PATH"
+# Build command with optional cover argument
+ARGS=(
+  "$INPUT_DIR"
+  --title "$TITLE"
+  --author "$AUTHOR"
+  --lang "$LANG"
+  --description "$DESCRIPTION"
+)
+
+if [ -n "$COVER" ] && [ -f "$COVER" ]; then
+  ARGS+=(--cover "$COVER")
+fi
+
+ARGS+=(--output "$OUTPUT_PATH")
+
+$PYTHON "$PROJECT_ROOT/make_epub_from_dir.py" "${ARGS[@]}"
 
 echo "Created: $OUTPUT_PATH"
 
