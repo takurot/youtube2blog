@@ -24,24 +24,6 @@ require_cmd() {
   fi
 }
 
-normalize_channel_url() {
-  # 入力: $1 (チャンネルURL: /videos の有無は任意)
-  # 出力: 人気順クエリ付きURL
-  local input_url="$1"
-
-  # /videos を付与
-  local base
-  if [[ "$input_url" == *"/videos"* ]]; then
-    base="$input_url"
-  else
-    base="${input_url%/}/videos"
-  fi
-
-  # 既存クエリを除去して人気順用クエリを付与
-  local base_no_q="${base%%\?*}"
-  echo "${base_no_q}?view=0&sort=p&flow=grid"
-}
-
 main() {
   local count=50
   local output=""
@@ -86,22 +68,37 @@ main() {
   require_cmd yt-dlp
   require_cmd sed
   require_cmd awk
+  require_cmd sort
+  require_cmd head
 
-  # URL整形
-  final_url="$(normalize_channel_url "$channel_url")"
+  # URL整形（/videos を付与、クエリは付けない）
+  local base
+  if [[ "$channel_url" == *"/videos"* ]]; then
+    base="${channel_url%%\?*}"
+  else
+    base="${channel_url%/}/videos"
+  fi
+  
+  final_url="${base%%\?*}"
 
   # 取得コマンド
-  # -I 1:${count}: 上位N件
-  # --flat-playlist: URLのみ高速取得
+  # --flat-playlist: メタデータのみ高速取得
+  # 再生回数と URL を取得し、再生回数でソート
   # awk '!seen[$0]++': 重複除去(順序保持)
   if [[ -n "$output" ]]; then
-    yt-dlp --flat-playlist -I "1:${count}" --print "%(webpage_url)s" "$final_url" \
+    yt-dlp --flat-playlist --print "%(view_count)s %(webpage_url)s" "$final_url" \
       | sed '/^$/d' \
+      | sort -rn \
+      | head -n "${count}" \
+      | awk '{print $2}' \
       | awk '!seen[$0]++' \
       | tee "$output" >/dev/null
   else
-    yt-dlp --flat-playlist -I "1:${count}" --print "%(webpage_url)s" "$final_url" \
+    yt-dlp --flat-playlist --print "%(view_count)s %(webpage_url)s" "$final_url" \
       | sed '/^$/d' \
+      | sort -rn \
+      | head -n "${count}" \
+      | awk '{print $2}' \
       | awk '!seen[$0]++'
   fi
 }
